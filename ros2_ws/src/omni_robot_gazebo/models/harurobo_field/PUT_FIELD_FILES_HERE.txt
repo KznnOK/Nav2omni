@@ -1,0 +1,12 @@
+Copy the following files manually from the previous package:
+
+Source package:
+~/robocon_study/ros2/omni_v3/ros2_ws/src/kansai_spring_robocon_2027_field
+
+Copy:
+models/harurobo_field/model.sdf
+models/harurobo_field/meshes/harurobo_field.stl
+
+Destination:
+~/robocon_study/ros2/omni_nav2/ros2_ws/src/omni_robot_gazebo/models/harurobo_field/model.sdf
+~/robocon_study/ros2/omni_nav2/ros2_ws/src/omni_robot_gazebo/models/harurobo_field/meshes/harurobo_field.stl

@@ -1,0 +1,33 @@
+# ROS 2 / colcon
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+
+# 誤ってパッケージ内でビルドした生成物
+**/build/
+**/install/
+**/log/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# ROS generated files
+frames_*.pdf
+frames_*.gv
+*.bag
+*.db3
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS metadata
+.DS_Store
+Thumbs.db
+*:Zone.Identifier
