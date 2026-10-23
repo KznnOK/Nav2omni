@@ -1,28 +1,48 @@
-import os
-from glob import glob
 from setuptools import find_packages, setup
 
+
 package_name = "omni_robot_description"
+
 
 setup(
     name=package_name,
     version="0.0.0",
-    packages=find_packages(exclude=["test"]),
+    packages=find_packages(),
     data_files=[
-        ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
-        ("share/" + package_name, ["package.xml"]),
-        (os.path.join("share", package_name, "launch"), glob("launch/*.launch.py")),
-        (os.path.join("share", package_name, "urdf"), glob("urdf/*")),
-        (os.path.join("share", package_name, "meshes"), glob("meshes/*")),
-        (os.path.join("share", package_name, "rviz"), glob("rviz/*")),
-        (os.path.join("share", package_name, "config"), glob("config/*")),
+        (
+            "share/ament_index/resource_index/packages",
+            [
+                "resource/omni_robot_description",
+            ],
+        ),
+        (
+            "share/omni_robot_description",
+            [
+                "package.xml",
+            ],
+        ),
+        (
+            "share/omni_robot_description/launch",
+            [
+                "launch/display.launch.py",
+            ],
+        ),
+        (
+            "share/omni_robot_description/urdf",
+            [
+                "urdf/omni_robot.urdf.xacro",
+            ],
+        ),
     ],
-    install_requires=["setuptools"],
+    install_requires=[
+        "setuptools",
+    ],
     zip_safe=True,
     maintainer="ubuntu",
     maintainer_email="ubuntu@todo.todo",
-    description="Robot description for the four wheel omni robot",
+    description="Robot description for the four-wheel omni robot",
     license="TODO",
-    tests_require=["pytest"],
-    entry_points={"console_scripts": []},
+    entry_points={
+        "console_scripts": [],
+    },
 )

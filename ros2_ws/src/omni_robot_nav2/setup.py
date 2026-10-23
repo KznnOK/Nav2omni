@@ -26,6 +26,7 @@ setup(
             [
                 "launch/map_server.launch.py",
                 "launch/localization.launch.py",
+                "launch/navigation.launch.py",
             ],
         ),
         (
@@ -39,6 +40,7 @@ setup(
             "share/omni_robot_nav2/config",
             [
                 "config/amcl.yaml",
+                "config/nav2_params.yaml",
             ],
         ),
     ],

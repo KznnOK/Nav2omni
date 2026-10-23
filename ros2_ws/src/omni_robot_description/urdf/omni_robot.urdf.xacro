@@ -3,11 +3,13 @@
 
   <xacro:arg name="controllers_file" default=""/>
 
+  <!-- Base parameters -->
   <xacro:property name="base_length" value="0.6"/>
   <xacro:property name="base_width" value="0.6"/>
   <xacro:property name="base_height" value="0.15"/>
   <xacro:property name="base_mass" value="20.0"/>
 
+  <!-- Wheel parameters -->
   <xacro:property name="wheel_radius" value="0.05"/>
   <xacro:property name="wheel_width" value="0.03"/>
   <xacro:property name="wheel_mass" value="0.5"/>
@@ -20,7 +22,7 @@
   <joint name="base_footprint_joint" type="fixed">
     <parent link="base_footprint"/>
     <child link="base_link"/>
-    <origin xyz="0 0 0.075"/>
+    <origin xyz="0 0 0.075" rpy="0 0 0"/>
   </joint>
 
   <!-- base_link -->
@@ -38,25 +40,29 @@
     </visual>
 
     <collision>
-        <geometry>
-    	<box size="${base_length} ${base_width} ${base_height}"/>
-  	</geometry> 
+      <geometry>
+        <box size="${base_length} ${base_width} ${base_height}"/>
+      </geometry>
     </collision>
 
     <inertial>
       <mass value="${base_mass}"/>
-      <origin xyz="0 0 0"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
 
       <inertia
-        ixx="0.8"
+        ixx="0.6375"
         ixy="0.0"
         ixz="0.0"
-        iyy="0.8"
+        iyy="0.6375"
         iyz="0.0"
         izz="1.2"/>
     </inertial>
 
   </link>
+
+  <gazebo reference="base_link">
+    <material>Gazebo/Blue</material>
+  </gazebo>
 
   <!-- Wheel macro -->
 
@@ -65,7 +71,7 @@
     <link name="${name}">
 
       <visual>
-        <origin rpy="1.570796 0 0"/>
+        <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
 
         <geometry>
           <cylinder
@@ -79,7 +85,7 @@
       </visual>
 
       <collision>
-        <origin rpy="1.570796 0 0"/>
+        <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
 
         <geometry>
           <cylinder
@@ -90,15 +96,15 @@
 
       <inertial>
         <mass value="${wheel_mass}"/>
-        <origin xyz="0 0 0"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
 
         <inertia
-          ixx="0.000154"
+          ixx="0.00035"
           ixy="0.0"
           ixz="0.0"
           iyy="0.000625"
           iyz="0.0"
-          izz="0.000154"/>
+          izz="0.00035"/>
       </inertial>
 
     </link>
@@ -113,14 +119,23 @@
 
       <axis xyz="0 1 0"/>
 
+      <limit
+        effort="100.0"
+        velocity="60.0"/>
+
       <dynamics
         damping="0.02"
         friction="0.0"/>
     </joint>
 
     <gazebo reference="${name}">
+      <material>Gazebo/Black</material>
+
       <mu1>1.0</mu1>
       <mu2>0.02</mu2>
+
+      <fdir1>1 0 0</fdir1>
+
       <kp>1000000.0</kp>
       <kd>10.0</kd>
       <minDepth>0.001</minDepth>
@@ -135,27 +150,27 @@
     name="front_left_wheel"
     x="0.25"
     y="0.25"
-    yaw="-0.785398"/>
+    yaw="-0.78539816339"/>
 
   <xacro:wheel
     name="front_right_wheel"
     x="0.25"
     y="-0.25"
-    yaw="0.785398"/>
+    yaw="0.78539816339"/>
 
   <xacro:wheel
     name="rear_left_wheel"
     x="-0.25"
     y="0.25"
-    yaw="0.785398"/>
+    yaw="0.78539816339"/>
 
   <xacro:wheel
     name="rear_right_wheel"
     x="-0.25"
     y="-0.25"
-    yaw="-0.785398"/>
+    yaw="-0.78539816339"/>
 
-  <!-- 2D LiDAR -->
+  <!-- Visible LiDAR body -->
 
   <link name="lidar_link">
 
@@ -169,34 +184,31 @@
       </material>
     </visual>
 
-    <collision>
-      <geometry>
-        <cylinder radius="0.04" length="0.05"/>
-      </geometry>
-    </collision>
-
-    <inertial>
-      <mass value="0.2"/>
-      <origin xyz="0 0 0"/>
-
-      <inertia
-        ixx="0.0001"
-        ixy="0.0"
-        ixz="0.0"
-        iyy="0.0001"
-        iyz="0.0"
-        izz="0.0001"/>
-    </inertial>
-
   </link>
 
   <joint name="lidar_joint" type="fixed">
     <parent link="base_link"/>
     <child link="lidar_link"/>
-    <origin xyz="0.38 0 -0.10" rpy="0 0 0"/>
+    <origin xyz="0.0 0.0 0.10" rpy="0 0 0"/>
   </joint>
 
-  <gazebo reference="lidar_link">
+  <!--
+    Invisible scan origin.
+
+    The visible LiDAR remains on the robot.
+    The scan origin is placed forward and lower so that the low field walls
+    can be detected without the laser intersecting the robot body.
+  -->
+
+  <link name="lidar_scan_link"/>
+
+  <joint name="lidar_scan_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="lidar_scan_link"/>
+    <origin xyz="0.38 0.0 -0.10" rpy="0 0 0"/>
+  </joint>
+
+  <gazebo reference="lidar_scan_link">
 
     <sensor name="lidar_sensor" type="ray">
 
@@ -210,8 +222,8 @@
           <horizontal>
             <samples>720</samples>
             <resolution>1.0</resolution>
-            <min_angle>-3.14159265</min_angle>
-            <max_angle>3.14159265</max_angle>
+            <min_angle>-3.14159265359</min_angle>
+            <max_angle>3.14159265359</max_angle>
           </horizontal>
         </scan>
 
@@ -238,7 +250,7 @@
         </ros>
 
         <output_type>sensor_msgs/LaserScan</output_type>
-        <frame_name>lidar_link</frame_name>
+        <frame_name>lidar_scan_link</frame_name>
 
       </plugin>
 
@@ -253,7 +265,7 @@
   <joint name="imu_joint" type="fixed">
     <parent link="base_link"/>
     <child link="imu_link"/>
-    <origin xyz="0 0 0"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
   </joint>
 
   <!-- ros2_control -->
