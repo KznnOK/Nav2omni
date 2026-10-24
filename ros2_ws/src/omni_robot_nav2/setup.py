@@ -27,6 +27,7 @@ setup(
                 "launch/map_server.launch.py",
                 "launch/localization.launch.py",
                 "launch/navigation.launch.py",
+                "launch/navigate_to_goal.launch.py",
             ],
         ),
         (
@@ -53,6 +54,9 @@ setup(
     description="Nav2 configuration for the four-wheel omni robot",
     license="TODO",
     entry_points={
-        "console_scripts": [],
+        "console_scripts": [
+            "navigate_to_goal = "
+            "omni_robot_nav2.navigate_to_goal:main",
+        ],
     },
 )

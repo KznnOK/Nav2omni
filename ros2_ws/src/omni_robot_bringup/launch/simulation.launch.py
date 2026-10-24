@@ -38,6 +38,11 @@ def generate_launch_description():
         "navigation.launch.py",
     )
 
+    navigate_to_goal = include_launch(
+        "omni_robot_nav2",
+        "navigate_to_goal.launch.py",
+    )
+
     return LaunchDescription([
         gazebo,
         TimerAction(
@@ -51,5 +56,9 @@ def generate_launch_description():
         TimerAction(
             period=12.0,
             actions=[navigation],
+        ),
+        TimerAction(
+            period=13.0,
+            actions=[navigate_to_goal],
         ),
     ])
