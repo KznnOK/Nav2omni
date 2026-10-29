@@ -39,6 +39,11 @@ def generate_launch_description():
         "config",
         "omni_controllers.yaml"
     )
+    geometry_file = os.path.join(
+        gazebo_share,
+        "config",
+        "wheel_geometry.yaml",
+    )
 
     model_path = os.path.join(
         gazebo_share,
@@ -139,7 +144,8 @@ def generate_launch_description():
         parameters=[
             {
                 "use_sim_time": True,
-            }
+            },
+            geometry_file,
         ],
     )
 

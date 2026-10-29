@@ -14,6 +14,13 @@ class OmniDriveController(Node):
 
         # Robot parameters
         self.declare_parameter("wheel_radius", 0.05)
+        self.declare_parameter("wheel_x", [0.20, 0.20, -0.20, -0.20])
+        self.declare_parameter("wheel_y", [0.20, -0.20, 0.20, -0.20])
+        self.declare_parameter(
+            "wheel_direction_yaw",
+            [-0.7853981633974483, 0.7853981633974483,
+             0.7853981633974483, -0.7853981633974483],
+        )
         self.declare_parameter("max_wheel_speed", 40.0)
         self.declare_parameter("command_timeout", 0.5)
 
@@ -37,12 +44,12 @@ class OmniDriveController(Node):
         # 2. front_right
         # 3. rear_left
         # 4. rear_right
-        self.wheels = [
-            (0.25, 0.25, -math.pi / 4.0),
-            (0.25, -0.25, math.pi / 4.0),
-            (-0.25, 0.25, math.pi / 4.0),
-            (-0.25, -0.25, -math.pi / 4.0),
-        ]
+        wheel_x = list(self.get_parameter("wheel_x").value)
+        wheel_y = list(self.get_parameter("wheel_y").value)
+        wheel_yaw = list(self.get_parameter("wheel_direction_yaw").value)
+        if not (len(wheel_x) == len(wheel_y) == len(wheel_yaw) == 4):
+            raise ValueError("wheel geometry must contain exactly four wheels")
+        self.wheels = list(zip(wheel_x, wheel_y, wheel_yaw))
 
         self.wheel_command_publisher = self.create_publisher(
             Float64MultiArray,

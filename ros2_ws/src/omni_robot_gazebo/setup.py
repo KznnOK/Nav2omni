@@ -65,6 +65,9 @@ setup(
 
         "omni_odometry = "
         "omni_robot_gazebo.omni_odometry:main",
+
+        "imu_covariance = "
+        "omni_robot_gazebo.imu_covariance:main",
         ],
     },
 )

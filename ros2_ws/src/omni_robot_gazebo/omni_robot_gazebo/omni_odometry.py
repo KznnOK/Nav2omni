@@ -16,29 +16,45 @@ class OmniOdometry(Node):
         super().__init__("omni_odometry")
 
         self.declare_parameter("wheel_radius", 0.05)
+        self.declare_parameter(
+            "wheel_joint_names",
+            [
+                "front_left_wheel_joint",
+                "front_right_wheel_joint",
+                "rear_left_wheel_joint",
+                "rear_right_wheel_joint",
+            ],
+        )
+        self.declare_parameter("wheel_x", [0.20, 0.20, -0.20, -0.20])
+        self.declare_parameter("wheel_y", [0.20, -0.20, 0.20, -0.20])
+        self.declare_parameter(
+            "wheel_direction_yaw",
+            [-0.7853981633974483, 0.7853981633974483,
+             0.7853981633974483, -0.7853981633974483],
+        )
         self.declare_parameter("odom_frame", "odom")
         self.declare_parameter("base_frame", "base_footprint")
         self.declare_parameter("publish_rate", 50.0)
+        self.declare_parameter("publish_tf", False)
+        self.declare_parameter("odom_topic", "/wheel/odom")
 
         self.wheel_radius = float(self.get_parameter("wheel_radius").value)
         self.odom_frame = str(self.get_parameter("odom_frame").value)
         self.base_frame = str(self.get_parameter("base_frame").value)
         publish_rate = float(self.get_parameter("publish_rate").value)
 
-        self.joint_names = [
-            "front_left_wheel_joint",
-            "front_right_wheel_joint",
-            "rear_left_wheel_joint",
-            "rear_right_wheel_joint",
-        ]
+        self.joint_names = list(
+            self.get_parameter("wheel_joint_names").value
+        )
 
         # Each row maps [vx, vy, wz] to wheel tangential velocity.
-        wheel_geometry = [
-            (0.25, 0.25, -math.pi / 4.0),
-            (0.25, -0.25, math.pi / 4.0),
-            (-0.25, 0.25, math.pi / 4.0),
-            (-0.25, -0.25, -math.pi / 4.0),
-        ]
+        wheel_geometry = list(zip(
+            self.get_parameter("wheel_x").value,
+            self.get_parameter("wheel_y").value,
+            self.get_parameter("wheel_direction_yaw").value,
+        ))
+        if len(self.joint_names) != 4 or len(wheel_geometry) != 4:
+            raise ValueError("wheel geometry must contain exactly four wheels")
         self.kinematic_matrix = np.array([
             [
                 math.cos(yaw),
@@ -56,8 +72,12 @@ class OmniOdometry(Node):
         self.yaw = 0.0
         self.last_time = self.get_clock().now()
 
-        self.odom_publisher = self.create_publisher(Odometry, "/odom", 10)
-        self.tf_broadcaster = TransformBroadcaster(self)
+        self.odom_publisher = self.create_publisher(
+            Odometry, str(self.get_parameter("odom_topic").value), 10)
+        self.publish_tf = bool(self.get_parameter("publish_tf").value)
+        self.tf_broadcaster = (
+            TransformBroadcaster(self) if self.publish_tf else None
+        )
         self.joint_subscription = self.create_subscription(
             JointState,
             "/joint_states",
@@ -138,7 +158,8 @@ class OmniOdometry(Node):
         transform.transform.translation.z = 0.0
         transform.transform.rotation.z = qz
         transform.transform.rotation.w = qw
-        self.tf_broadcaster.sendTransform(transform)
+        if self.tf_broadcaster is not None:
+            self.tf_broadcaster.sendTransform(transform)
 
 
 def main(args=None):
