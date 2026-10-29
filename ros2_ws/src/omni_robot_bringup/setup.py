@@ -19,7 +19,10 @@ setup(
         ),
         (
             "share/omni_robot_bringup/launch",
-            ["launch/simulation.launch.py"],
+            [
+                "launch/simulation.launch.py",
+                "launch/experiment.launch.py",
+            ],
         ),
     ],
     install_requires=["setuptools"],

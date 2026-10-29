@@ -1,0 +1,2 @@
+trial_id,success,failure_reason,pickup_result,rotation_waypoint_result,spin_result,drop_result,pickup_xy_error_m,drop_xy_error_m,drop_yaw_error_rad,pickup_stop_wait_s,rotation_x,rotation_y,rotation_duration_s,start_to_pickup_s,pickup_to_drop_s,pickup_wait_to_rotation_s,rotation_to_drop_s,nav2_ready_wait_s,amcl_first_pose_wait_s,travel_distance_m,total_duration_s
+1,False,LiDAR obstacle detected in clearance path,,,,,nan,2.6745360738975177,3.141592653589793,,,,nan,nan,nan,nan,nan,1.950765968,0.606900938,0.0,nan

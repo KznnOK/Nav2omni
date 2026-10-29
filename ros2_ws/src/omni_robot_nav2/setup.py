@@ -42,6 +42,7 @@ setup(
             [
                 "config/amcl.yaml",
                 "config/nav2_params.yaml",
+                "config/mission.yaml",
             ],
         ),
     ],
@@ -57,6 +58,12 @@ setup(
         "console_scripts": [
             "navigate_to_goal = "
             "omni_robot_nav2.navigate_to_goal:main",
+            "route_experiment = "
+            "omni_robot_nav2.route_experiment:main",
+            "mission_manager = "
+            "omni_robot_nav2.route_experiment:main",
+            "plot_route_results = "
+            "omni_robot_nav2.plot_route_results:main",
         ],
     },
 )

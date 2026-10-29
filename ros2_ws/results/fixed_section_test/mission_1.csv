@@ -1,0 +1,2 @@
+trial_id,success,failed_state,failure_reason,narrow_result,narrow_distance_m,narrow_duration_s,pickup_result,start_to_pickup_s,pickup_wait_s,rotation_result,pickup_to_rotation_s,spin_result,spin_duration_s,drop_result,rotation_to_drop_s,fixed_section_result,fixed_segment_times_s,fixed_stop_errors_m,fixed_max_yaw_error_rad,fixed_min_scan_m,final_x,final_y,final_yaw,pickup_xy_error_m,drop_xy_error_m,drop_yaw_error_rad,total_duration_s,startup_localization_wait_s
+1,False,WAIT_FOR_LOCALIZATION,state timeout after 120.0s,FAILED,,,,,,,,,,,,FAILED,,,0.000000,,,,,,,,,

@@ -1,0 +1,7 @@
+run_id: mission_20261029_011000
+footprint_m: [0.5, 0.5]
+start: {x: -3.1510900301327864, y: -3.136311120883107, yaw: 0.0}
+pickup: {x: -2.4844879132843367, y: 1.7525297248907472, yaw: 0.0}
+rotation: {x: -1.0, y: -2.4, yaw: 0.0}
+drop: {x: -0.6351846679129013, y: -2.2289173701157674, yaw: 3.141592653589793}
+config: narrow_section_closed_loop_then_nav2_spin

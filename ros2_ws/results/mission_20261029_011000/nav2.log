@@ -1,0 +1,105 @@
+1793203642.3893337 [INFO] [launch]: All log files can be found below /home/ubuntu/.ros/log/2026-10-29-01-07-22-388156-LAPTOP-S8NUI6QF-15485
+1793203642.3894880 [INFO] [launch]: Default logging verbosity is set to INFO
+1793203642.9865520 [INFO] [gzserver-1]: process started with pid [15487]
+1793203642.9867325 [INFO] [gzclient-2]: process started with pid [15489]
+1793203642.9867980 [INFO] [robot_state_publisher-3]: process started with pid [15491]
+1793203642.9868586 [INFO] [spawn_entity.py-4]: process started with pid [15493]
+1793203642.9873664 [INFO] [spawner-5]: process started with pid [15495]
+1793203642.9876659 [INFO] [spawner-6]: process started with pid [15497]
+1793203642.9877388 [INFO] [omni_drive_controller-7]: process started with pid [15501]
+1793203643.4595220 [gzserver-1] Gazebo multi-robot simulator, version 11.10.2
+1793203643.4596808 [gzserver-1] Copyright (C) 2012 Open Source Robotics Foundation.
+1793203643.4597330 [gzserver-1] Released under the Apache 2 License.
+1793203643.4597735 [gzserver-1] http://gazebosim.org
+1793203643.4598053 [gzserver-1] 
+1793203643.7557261 [gzserver-1] [1;33m[Wrn] [gazebo_ros_init.cpp:178] [0m[1;33m
+1793203643.7559247 [gzserver-1] #     # ####### ####### ###  #####  #######
+1793203643.7559779 [gzserver-1] ##    # #     #    #     #  #     # #
+1793203643.7560203 [gzserver-1] # #   # #     #    #     #  #       #
+1793203643.7560565 [gzserver-1] #  #  # #     #    #     #  #       #####
+1793203643.7560866 [gzserver-1] #   # # #     #    #     #  #       #
+1793203643.7561152 [gzserver-1] #    ## #     #    #     #  #     # #
+1793203643.7561424 [gzserver-1] #     # #######    #    ###  #####  #######
+1793203643.7561688 [gzserver-1] 
+1793203643.7577107 [gzserver-1] This version of Gazebo, now called Gazebo classic, reaches end-of-life
+1793203643.7577724 [gzserver-1] in January 2025. Users are highly encouraged to migrate to the new Gazebo
+1793203643.7578132 [gzserver-1] using our migration guides (https://gazebosim.org/docs/latest/gazebo_classic_migration?utm_source=gazebo_ros_pkgs&utm_medium=cli)
+1793203643.7578661 [gzserver-1] 
+1793203643.7579007 [gzserver-1] [0m[1;33m
+1793203647.9925730 [INFO] [omni_odometry-8]: process started with pid [15672]
+1793203648.5616715 [gzserver-1] [1;32m[Msg] [0m[1;32mWaiting for master.[0m[1;32m
+1793203648.5618334 [gzserver-1] [0m[1;32m[0m[1;32m[0m[1;32m[Msg] [0m[1;32mConnected to gazebo master @ [0m[1;32mhttp://127.0.0.1:11345[0m[1;32m
+1793203648.5618742 [gzserver-1] [0m[1;32m[0m[1;32m[0m[1;32m[Msg] [0m[1;32mPublicized address: [0m[1;32m10.255.255.254[0m[1;32m
+1793203648.5619049 [gzserver-1] [0m[1;32m[0m[1;32m[0m[1;32m[Msg] [0m[1;32mLoading world file [[0m[1;32m/home/ubuntu/robocon_study/ros2/omni_nav2/ros2_ws/install/omni_robot_gazebo/share/omni_robot_gazebo/worlds/kansai_spring_robocon_2027.world[0m[1;32m][0m[1;32m
+1793203651.0114172 [INFO] [map_server-9]: process started with pid [15691]
+1793203651.0115540 [INFO] [amcl-10]: process started with pid [15693]
+1793203651.0115998 [INFO] [lifecycle_manager-11]: process started with pid [15695]
+1793203655.1063111 [INFO] [controller_server-12]: process started with pid [15741]
+1793203655.1066413 [INFO] [smoother_server-13]: process started with pid [15743]
+1793203655.1067355 [INFO] [planner_server-14]: process started with pid [15745]
+1793203655.1071496 [INFO] [behavior_server-15]: process started with pid [15747]
+1793203655.1073573 [INFO] [bt_navigator-16]: process started with pid [15749]
+1793203655.1074481 [INFO] [waypoint_follower-17]: process started with pid [15751]
+1793203655.1075234 [INFO] [velocity_smoother-18]: process started with pid [15788]
+1793203655.1075890 [INFO] [lifecycle_manager-19]: process started with pid [15791]
+1793203674.4883947 [gzserver-1] [0m[1;33m[0m[1;33m[0mALSA lib confmisc.c:855:(parse_card) cannot find card '0'
+1793203674.4886317 [gzserver-1] ALSA lib conf.c:5182:(_snd_config_evaluate) function snd_func_card_inum returned error: No such file or directory
+1793203674.4886858 [gzserver-1] ALSA lib confmisc.c:422:(snd_func_concat) error evaluating strings
+1793203674.4888539 [gzserver-1] ALSA lib conf.c:5182:(_snd_config_evaluate) function snd_func_concat returned error: No such file or directory
+1793203674.4890590 [gzserver-1] ALSA lib confmisc.c:1334:(snd_func_refer) error evaluating name
+1793203674.4892011 [gzserver-1] ALSA lib conf.c:5182:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
+1793203674.4893262 [gzserver-1] ALSA lib conf.c:5705:(snd_config_expand) Evaluate error: No such file or directory
+1793203674.4893899 [gzserver-1] ALSA lib pcm.c:2664:(snd_pcm_open_noupdate) Unknown PCM default
+1793203674.4894323 [gzserver-1] AL lib: (EE) ALCplaybackAlsa_open: Could not open playback device 'default': No such file or directory
+1793203674.4894786 [gzserver-1] [1;31m[Err] [OpenAL.cc:84] [0m[1;31mUnable to open audio device[[0m[1;31mdefault[0m[1;31m]
+1793203674.4895217 [gzserver-1]  Audio will be disabled.
+1793203675.2146888 [gzserver-1] [0m[INFO] [1793203675.213927519] [gazebo_ros2_control]: Loading gazebo_ros2_control plugin
+1793203675.2958937 [gzserver-1] [INFO] [1793203675.293843684] [gazebo_ros2_control]: Starting gazebo_ros2_control plugin in namespace: /
+1793203675.2961903 [gzserver-1] [INFO] [1793203675.294662586] [gazebo_ros2_control]: Starting gazebo_ros2_control plugin in ros 2 node: gazebo_ros2_control
+1793203675.3439052 [INFO] [spawn_entity.py-4]: process has finished cleanly [pid 15493]
+1793203675.3750925 [gzserver-1] [INFO] [1793203675.374654286] [gazebo_ros2_control]: connected to service!! robot_state_publisher
+1793203675.3761053 [gzserver-1] [INFO] [1793203675.375845034] [gazebo_ros2_control]: Received urdf from param server, parsing...
+1793203675.3852170 [gzserver-1] [INFO] [1793203675.384812261] [gazebo_ros2_control]: Loading parameter files /home/ubuntu/robocon_study/ros2/omni_nav2/ros2_ws/install/omni_robot_gazebo/share/omni_robot_gazebo/config/omni_controllers.yaml
+1793203675.3978894 [gzserver-1] [INFO] [1793203675.397368451] [gazebo_ros2_control]: Loading joint: front_left_wheel_joint
+1793203675.3981009 [gzserver-1] [INFO] [1793203675.397523739] [gazebo_ros2_control]: 	State:
+1793203675.3983591 [gzserver-1] [INFO] [1793203675.397541376] [gazebo_ros2_control]: 		 position
+1793203675.3984141 [gzserver-1] [INFO] [1793203675.397550929] [gazebo_ros2_control]: 		 velocity
+1793203675.3987124 [gzserver-1] [INFO] [1793203675.397557913] [gazebo_ros2_control]: 	Command:
+1793203675.3987632 [gzserver-1] [INFO] [1793203675.397592600] [gazebo_ros2_control]: 		 velocity
+1793203675.4098458 [gzserver-1] [INFO] [1793203675.408633167] [gazebo_ros2_control]: Loading joint: front_right_wheel_joint
+1793203675.4104140 [gzserver-1] [INFO] [1793203675.408691025] [gazebo_ros2_control]: 	State:
+1793203675.4112759 [gzserver-1] [INFO] [1793203675.408698993] [gazebo_ros2_control]: 		 position
+1793203675.4113488 [gzserver-1] [INFO] [1793203675.408705398] [gazebo_ros2_control]: 		 velocity
+1793203675.4114001 [gzserver-1] [INFO] [1793203675.408709851] [gazebo_ros2_control]: 	Command:
+1793203675.4114354 [gzserver-1] [INFO] [1793203675.408733974] [gazebo_ros2_control]: 		 velocity
+1793203675.4165506 [gzserver-1] [INFO] [1793203675.415700638] [gazebo_ros2_control]: Loading joint: rear_left_wheel_joint
+1793203675.4172587 [gzserver-1] [INFO] [1793203675.415767996] [gazebo_ros2_control]: 	State:
+1793203675.4174712 [gzserver-1] [INFO] [1793203675.415781942] [gazebo_ros2_control]: 		 position
+1793203675.4176054 [gzserver-1] [INFO] [1793203675.415788015] [gazebo_ros2_control]: 		 velocity
+1793203675.4176805 [gzserver-1] [INFO] [1793203675.415792376] [gazebo_ros2_control]: 	Command:
+1793203675.4178085 [gzserver-1] [INFO] [1793203675.415816366] [gazebo_ros2_control]: 		 velocity
+1793203675.4236152 [gzserver-1] [INFO] [1793203675.423138042] [gazebo_ros2_control]: Loading joint: rear_right_wheel_joint
+1793203675.4240382 [gzserver-1] [INFO] [1793203675.423425138] [gazebo_ros2_control]: 	State:
+1793203675.4241140 [gzserver-1] [INFO] [1793203675.423439036] [gazebo_ros2_control]: 		 position
+1793203675.4241681 [gzserver-1] [INFO] [1793203675.423450330] [gazebo_ros2_control]: 		 velocity
+1793203675.4242134 [gzserver-1] [INFO] [1793203675.423456280] [gazebo_ros2_control]: 	Command:
+1793203675.4242806 [gzserver-1] [INFO] [1793203675.423486961] [gazebo_ros2_control]: 		 velocity
+1793203675.4293649 [gzserver-1] [INFO] [1793203675.428806332] [resource_manager]: Initialize hardware 'GazeboSystem' 
+1793203675.4304233 [gzserver-1] [INFO] [1793203675.429018311] [resource_manager]: Successful initialization of hardware 'GazeboSystem'
+1793203675.4320011 [gzserver-1] [INFO] [1793203675.429105288] [resource_manager]: 'configure' hardware 'GazeboSystem' 
+1793203675.4331689 [gzserver-1] [INFO] [1793203675.429114033] [resource_manager]: Successful 'configure' of hardware 'GazeboSystem'
+1793203675.4333715 [gzserver-1] [INFO] [1793203675.429120108] [resource_manager]: 'activate' hardware 'GazeboSystem' 
+1793203675.4334497 [gzserver-1] [INFO] [1793203675.429124668] [resource_manager]: Successful 'activate' of hardware 'GazeboSystem'
+1793203675.4334941 [gzserver-1] [INFO] [1793203675.429192151] [gazebo_ros2_control]: Loading controller_manager
+1793203675.6115577 [gzserver-1] [WARN] [1793203675.611112504] [gazebo_ros2_control]:  Desired controller update period (0.01 s) is slower than the gazebo simulation period (0.001 s).
+1793203675.6137490 [gzserver-1] [INFO] [1793203675.612601621] [gazebo_ros2_control]: Loaded gazebo_ros2_control.
+1793203675.8179662 [gzserver-1] [INFO] [1793203675.812148221] [controller_manager]: Loading controller 'joint_state_broadcaster'
+1793203675.9823108 [gzserver-1] [INFO] [1793203675.981677445] [controller_manager]: Loading controller 'wheel_velocity_controller'
+1793203676.1708636 [gzserver-1] [INFO] [1793203676.170330039] [controller_manager]: Configuring controller 'joint_state_broadcaster'
+1793203676.1713963 [gzserver-1] [INFO] [1793203676.170708085] [joint_state_broadcaster]: 'joints' or 'interfaces' parameter is empty. All available state interfaces will be published
+1793203676.2243838 [gzserver-1] [INFO] [1793203676.222777825] [controller_manager]: Configuring controller 'wheel_velocity_controller'
+1793203676.2295234 [gzserver-1] [INFO] [1793203676.227878104] [wheel_velocity_controller]: configure successful
+1793203676.2872758 [gzserver-1] [INFO] [1793203676.286668251] [wheel_velocity_controller]: activate successful
+1793203676.5935769 [INFO] [spawner-5]: process has finished cleanly [pid 15495]
+1793203676.6013284 [INFO] [spawner-6]: process has finished cleanly [pid 15497]
+1793203743.2900095 [gzserver-1] [1;33m[Wrn] [Publisher.cc:135] [0m[1;33mQueue limit reached for topic [0m[1;33m/gazebo/kansai_spring_robocon_2027/physics/contacts[0m[1;33m, deleting message. [0m[1;33mThis warning is printed only once.[0m[1;33m

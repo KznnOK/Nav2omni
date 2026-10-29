@@ -1,0 +1,4 @@
+segment,result,planning_time_s,pose_count,path_length_m,min_static_clearance_after_0.50m_footprint_m,global_cost_center_max,global_cost_center_inflated_pose_count,global_cost_center_lethal_pose_count
+exit_to_pickup,SUCCEEDED,0.1,538,5.995738492374389,0.08000000000000002,79,211,0
+pickup_to_rotation,SUCCEEDED,0.0,512,5.539531667466158,0.25,46,186,0
+rotation_to_drop,SUCCEEDED,0.0,37,0.4131038376130017,0.2,55,12,0

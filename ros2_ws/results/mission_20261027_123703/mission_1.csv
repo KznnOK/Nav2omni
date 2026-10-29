@@ -1,0 +1,2 @@
+trial_id,success,failed_state,failure_reason,narrow_result,narrow_distance_m,narrow_duration_s,pickup_result,start_to_pickup_s,pickup_wait_s,rotation_result,pickup_to_rotation_s,spin_result,spin_duration_s,drop_result,rotation_to_drop_s,final_x,final_y,final_yaw,pickup_xy_error_m,drop_xy_error_m,drop_yaw_error_rad,total_duration_s
+1,False,NARROW_SECTION,forward LiDAR obstacle detected,FAILED,,,,,,,,,,,,-3.1510900301328277,-3.1363111208834082,0.0,,2.6745360738975177,3.141592653589793,

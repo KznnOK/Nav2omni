@@ -1,0 +1,2 @@
+trial_id,success,failure_reason,pickup_result,rotation_waypoint_result,spin_result,drop_result,pickup_xy_error_m,drop_xy_error_m,drop_yaw_error_rad,pickup_stop_wait_s,rotation_x,rotation_y,rotation_duration_s,start_to_pickup_s,pickup_to_drop_s,pickup_wait_to_rotation_s,rotation_to_drop_s,travel_distance_m,total_duration_s
+2,True,,SUCCEEDED,SUCCEEDED,SUCCEEDED,SUCCEEDED,0.07850717051551359,0.12668323460013914,0.08440815404238335,3.000228672,-1.122637663907591,-2.388416775573866,5.2487249,24.455441977,53.198377829,44.551195783,3.101676771,11.23507350495994,77.653819806
