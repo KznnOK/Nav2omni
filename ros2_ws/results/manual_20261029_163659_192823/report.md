@@ -1,0 +1,6 @@
+# Manual run manual_20261029_163659_192823
+
+- Input: keyboard
+- Total time: nan s
+- Pickup stop: 0.000 s
+- Result directory: `results/manual_20261029_163659_192823`

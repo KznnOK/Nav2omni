@@ -1,0 +1,2 @@
+run_id,input_mode,pickup_time_s,pickup_stop_duration_s,drop_time_s,total_time_s,map_x,map_y,map_yaw,pickup_error_m,drop_error_m,drop_yaw_error_rad,distance_m,emergency_stop_count,mode_switch_count,success
+manual_20261029_162905_211551,keyboard,nan,0.0,nan,nan,-1.9057840891570805,-2.1380845839303957,1.5822523470316434,nan,1.2738420170147635,-1.5593403065581497,16.459687893363775,0,0,False

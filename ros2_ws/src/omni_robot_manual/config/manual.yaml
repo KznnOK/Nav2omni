@@ -1,0 +1,82 @@
+joy_manual_control:
+  ros__parameters:
+    joy_topic: /joy
+    output_topic: /cmd_vel_manual
+    event_topic: /manual/events
+    diagnostic: false
+    joy_timeout_s: 0.3
+    publish_rate_hz: 20.0
+    deadzone: 0.12
+    input_curve: 1.0
+    deadman_button: 0
+    emergency_stop_button: 1
+    start_button: 9
+    pickup_button: 3
+    drop_button: 2
+    precision_button: 4
+    high_speed_button: 5
+    axis_forward: 1
+    axis_lateral: 0
+    axis_rotate: 2
+    invert_forward: true
+    invert_lateral: false
+    invert_rotate: false
+    normal_max_linear: 0.25
+    normal_max_angular: 0.50
+    precision_max_linear: 0.08
+    precision_max_angular: 0.20
+    high_max_linear: 0.35
+    high_max_angular: 0.70
+    accel_limit_linear: 0.60
+    accel_limit_angular: 1.00
+
+keyboard_manual_control:
+  ros__parameters:
+    output_topic: /cmd_vel_manual
+    event_topic: /manual/events
+    publish_rate_hz: 20.0
+    key_timeout_s: 0.25
+    normal_max_linear: 0.25
+    normal_max_angular: 0.50
+    precision_max_linear: 0.08
+    precision_max_angular: 0.20
+    high_max_linear: 0.35
+    high_max_angular: 0.70
+    accel_limit_linear: 0.60
+    accel_limit_angular: 1.00
+
+keyboard_gui_control:
+  ros__parameters:
+    output_topic: /cmd_vel_manual
+    publish_rate_hz: 50.0
+    input_timeout_s: 0.30
+    normal_max_linear: 0.40
+    normal_max_angular: 0.90
+    precision_max_linear: 0.15
+    precision_max_angular: 0.35
+    high_max_linear: 0.60
+    high_max_angular: 1.20
+    linear_acceleration: 0.8
+    linear_deceleration: 1.2
+    angular_acceleration: 2.0
+    angular_deceleration: 3.0
+    window_width: 640
+    window_height: 360
+    window_title: "Omni Robot Manual Control"
+
+manual_cmd_mux:
+  ros__parameters:
+    mode: manual
+    manual_topic: /cmd_vel_manual
+    automatic_topic: /cmd_vel_auto
+    output_topic: /cmd_vel
+    input_timeout_s: 0.30
+    publish_rate_hz: 20.0
+
+manual_recorder:
+  ros__parameters:
+    mission_config: ""
+    results_root: results
+    input_mode: keyboard
+    sample_rate_hz: 20.0
+    stop_speed_threshold: 0.03
