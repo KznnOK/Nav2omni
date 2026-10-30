@@ -79,6 +79,9 @@ class Trial(Node):
         self.initial_pub = self.create_publisher(
             PoseWithCovarianceStamped, "/initialpose", 10)
         self.truth = None
+        self.amcl = None
+        self.create_subscription(
+            PoseWithCovarianceStamped, "/amcl_pose", self.on_amcl, 10)
         self.state = None
         self.target = None
         self.events = []
@@ -104,6 +107,10 @@ class Trial(Node):
                       math.hypot(msg.twist.twist.linear.x, msg.twist.twist.linear.y))
         if self.on_truth_sample:
             self.on_truth_sample()
+
+    def on_amcl(self, msg):
+        p = msg.pose.pose
+        self.amcl = (p.position.x, p.position.y, yaw_of(p.orientation))
 
     def on_debug(self, msg):
         # t, ref_x, ref_y, ref_v, ref_yaw, est_x, est_y, est_yaw, ...
@@ -132,7 +139,21 @@ class Trial(Node):
         while self.now() - start < sim_seconds and time.time() - wall < wall_limit:
             rclpy.spin_once(self, timeout_sec=0.02)
 
-    def place(self, x, y, yaw):
+    def place(self, x, y, yaw, attempts=3, tol=0.03, yaw_tol_deg=2.0):
+        """Teleport the robot and re-initialize AMCL; retry until both the
+        truth and /amcl_pose are at the requested pose. Returns success."""
+        def near(pose):
+            return (pose is not None and math.hypot(pose[0] - x, pose[1] - y) <= tol
+                    and abs(math.degrees(math.atan2(math.sin(pose[2] - yaw),
+                                                    math.cos(pose[2] - yaw)))) <= yaw_tol_deg)
+        for _ in range(attempts):
+            self.amcl = None
+            self._place_once(x, y, yaw)
+            if near(self.truth) and near(self.amcl):
+                return True
+        return False
+
+    def _place_once(self, x, y, yaw):
         state = EntityState()
         state.name = "omni_robot"
         state.pose.position.x, state.pose.position.y = x, y
@@ -282,7 +303,7 @@ def settle_rows(row, node, args):
 def run_trial(node, study, start, args, overrides):
     node.call(node.set_autonomy, SetBool.Request(data=False))
     node.spin_for(0.5)
-    node.place(*start)
+    placed = node.place(*start)
     node.set_mission_params(overrides)
     node.events = []
     node.samples = []
@@ -389,6 +410,8 @@ def run_trial(node, study, start, args, overrides):
     row["contact_at"] = tracking["contact_at"]
     if tracking["contact"]:
         reasons.insert(0, "wall contact")
+    if not placed:
+        reasons.insert(0, "start reset failed (truth or AMCL not at the start pose)")
     if final == "FAILED":
         reasons.insert(0, "mission failed: " + final_text[len("FAILED"):].strip())
     elif final != "DONE":
