@@ -8,25 +8,42 @@
 #   dice zone left line, outer edge x = -0.725; area 1 y -3.462 .. -2.762
 sakura_mission:
   ros__parameters:
-    # --- waypoint graph (仮値: chosen with >= 0.05 m clearance) -----------
+    # --- waypoint graph -------------------------------------------------
+    # Lanes are placed in the middle of the free space so the graph itself
+    # keeps >= 0.22 m from every frame (outline incl. LiDAR, heading 0 or
+    # 180 deg). Only dice_front -> area1_exit is closer (0.10 m to the bottom
+    # frame), because the start pose in front of the dice zone is fixed.
+    #   below the L frame : y between area1 top frame (-2.724) and the end of
+    #                       the long vertical frame (-1.624) -> -2.174
+    #   L interior lane   : x between stub tips (-2.962) and the long vertical
+    #                       frame (-1.900) -> -2.446
+    #   zigzag            : stub_lower tip (-2.962, -0.852) and stub_middle
+    #                       tip (-2.400, 0.148) are passed alternately; the
+    #                       lane shifts to x = -2.946 (middle of -3.462..-2.400)
+    #                       between them
     # Each waypoint is "name x y". Edges are "name name" (both directions).
     waypoints:
-      - "dice_front -1.055 -3.112"   # area 1 center; +x edge 0.05 left of the dice line
-      - "area1_exit -1.055 -2.200"   # above area 1, below the L frame
-      - "below_l -2.550 -2.200"
-      - "zigzag_low -2.550 -0.350"   # left edge 0.16 right of stub_lower tip (x -2.962)
-      - "zigzag_shift -2.750 -0.350"
-      - "zigzag_high -2.750 0.600"   # +x edge 0.07 left of stub_middle tip (x -2.400)
-      - "sakura_lane -2.662 0.600"
+      - "dice_front -1.055 -3.112"
+      - "area1_exit -1.055 -2.174"
+      - "below_l -2.446 -2.174"
+      - "zig_a -2.446 -0.452"
+      - "zig_b -2.946 -0.252"
+      - "zig_c -2.946 0.598"
+      - "lane_up -2.446 0.786"
+      - "sakura_side -2.446 1.774"     # sakura stop is approached from +x
       - "sakura_stop -2.662 1.774"
+      - "common_front -0.793 -2.019"   # return pose, see below
     edges:
       - "dice_front area1_exit"
       - "area1_exit below_l"
-      - "below_l zigzag_low"
-      - "zigzag_low zigzag_shift"
-      - "zigzag_shift zigzag_high"
-      - "zigzag_high sakura_lane"
-      - "sakura_lane sakura_stop"
+      - "below_l zig_a"
+      - "zig_a zig_b"
+      - "zig_b zig_c"
+      - "zig_c lane_up"
+      - "lane_up sakura_side"
+      - "sakura_side sakura_stop"
+      - "area1_exit common_front"
+      - "below_l common_front"
 
     # --- mission poses ---------------------------------------------------
     # Sakura stop: left (-x) arm face toward the zone, theta = 0.
@@ -38,12 +55,27 @@ sakura_mission:
     # +y outline is also 0.25, so the same x keeps the same standoff.
     sakura_rotated_yaw_deg: 90.0
     sakura_wait_s: 3.0
-    # Return (帰着) pose: default is the dice-front node with the start yaw.
-    return_node: "dice_front"
-    return_x: -1.055
-    return_y: -3.112
-    return_yaw_deg: 0.0
-    # Heading kept while travelling (fixed; no rotation in narrow passages).
+    # Return (帰着) pose: in front of common zones 1-2 for placing bottles by
+    # hand, theta = 180 deg (left/-x arm face toward the common zones, +x).
+    #   common zone 1: y -2.500 .. -2.038, zone 2: y -2.000 .. -1.538
+    #     (rungs every 500 mm, 図4) -> y = middle of zones 1-2 = -2.019
+    #   area 3 left boundary white line: x -0.493 .. -0.443 (300 mm left of
+    #     the ladder frame at x -0.188). The robot stays in area 2: its +x
+    #     edge (0.25 at 180 deg) is 0.05 m (仮値) left of the line:
+    #     x = -0.493 - 0.05 - 0.25 = -0.793
+    #   bottom edge y -2.269 is 0.45 m above the area 1 top white line
+    #   (y -2.718); nearest frame (ladder, x -0.188) is 0.355 m away.
+    return_node: "common_front"
+    return_x: -0.793
+    return_y: -2.019
+    return_yaw_deg: 180.0
+    # 90 -> 180 deg after the sakura zone: "in_place" (turn near the zone,
+    # backing off if needed) or "moving" (turn while travelling where the
+    # whole turn is clear by path_clearance_margin).
+    return_rotation: "in_place"
+    rotation_length_max: 1.2        # m of path used for the turn (moving)
+    rotation_length_min: 0.4
+    # Heading kept on the way to the sakura zone (no rotation in passages).
     travel_yaw_deg: 0.0
 
     # Rotation at the sakura zone must not sweep into walls (map) or into

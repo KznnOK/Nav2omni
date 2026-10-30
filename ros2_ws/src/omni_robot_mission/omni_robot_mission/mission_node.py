@@ -9,8 +9,11 @@ Runs while /autonomy_enabled is true (set by mode_manager):
                  first only if the in-place turn would hit a wall/keep-out
   WAIT_SAKURA_2  sakura_wait_s
   BACKOFF_2 / ROTATE_2 / RETURN
-                 turn back to the travel heading (where it is clear) and go
-                 along the graph to the return pose
+                 go along the graph to the return pose (default: in front of
+                 common zones 1-2, theta = 180 deg). return_rotation selects
+                 how 90 -> 180 deg is done: "in_place" (back off if needed,
+                 turn, then travel) or "moving" (turn while travelling, in a
+                 section where the whole turn is clear)
   DONE / FAILED / ABORTED
 Paths are shortcut and filleted (trajectory.SmoothPath) and followed with the
 planned speed as feed-forward plus a small capped lateral correction. Stops
@@ -72,8 +75,10 @@ class Move:
     """One motion step: a path at a fixed heading or an in-place rotation."""
 
     def __init__(self, kind, points=None, yaw=None, hold=None,
-                 tolerance=0.03, yaw_tolerance=math.radians(3.0), label=None):
+                 tolerance=0.03, yaw_tolerance=math.radians(3.0), label=None,
+                 yaw_start=None):
         self.kind = kind
+        self.yaw_start = yaw if yaw_start is None else yaw_start
         self.label = label
         self.points = points
         self.yaw = yaw
@@ -96,10 +101,13 @@ class SakuraMission(Node):
         p("sakura_yaw_deg", 0.0)
         p("sakura_rotated_yaw_deg", 90.0)
         p("sakura_wait_s", 3.0)
-        p("return_node", "dice_front")
-        p("return_x", -1.055)
-        p("return_y", -3.112)
-        p("return_yaw_deg", 0.0)
+        p("return_node", "common_front")
+        p("return_x", -0.793)
+        p("return_y", -2.019)
+        p("return_yaw_deg", 180.0)
+        p("return_rotation", "in_place")
+        p("rotation_length_max", 1.2)
+        p("rotation_length_min", 0.4)
         p("travel_yaw_deg", 0.0)
         p("rotation_keepout", [""])
         p("rotation_backoff_direction", [1.0, 0.0])
@@ -279,13 +287,12 @@ class SakuraMission(Node):
         self.moves = [self.path_move(points, yaw, precise=True, label="GO_SAKURA")]
         self.next_state("GO_SAKURA")
 
-    def graph_route(self, pose, goal_node):
+    def graph_route(self, pose, goal_node, yaws=None):
         x, y, yaw = pose
-        travel = math.radians(self.param("travel_yaw_deg"))
+        headings = {yaw} | set(yaws or (math.radians(self.param("travel_yaw_deg")),))
 
         def clear(a, b):
-            return (self.checker.segment_clear(a, b, yaw)
-                    and self.checker.segment_clear(a, b, travel))
+            return all(self.checker.segment_clear(a, b, h) for h in headings)
 
         entry = self.graph.nearest_reachable(x, y, clear)
         if entry is None:
@@ -365,9 +372,13 @@ class SakuraMission(Node):
             if not self.moves:
                 self.after_moves()
 
-    def direction_speed_limit(self, direction):
-        """Max speed in a body-frame direction with every wheel <= its limit."""
-        peak = max(abs(math.cos(direction - wyaw)) for wyaw in self.wheel_yaw)
+    def speed_limit(self, direction, yaw_per_m):
+        """Max speed in a body-frame direction with every wheel <= its limit,
+        including the wheel speed used to turn at yaw_per_m (rad per m)."""
+        peak = 0.0
+        for wx, wy, wyaw in zip(self.wheel_x, self.wheel_y, self.wheel_yaw):
+            lever = -math.cos(wyaw) * wy + math.sin(wyaw) * wx
+            peak = max(peak, abs(math.cos(direction - wyaw) + yaw_per_m * lever))
         return (float(self.param("wheel_speed_margin")) * self.max_wheel_speed
                 * self.wheel_radius / max(peak, 1e-6))
 
@@ -375,27 +386,35 @@ class SakuraMission(Node):
         """Build the smoothed path from the actual pose when a move starts."""
         if move.kind == "path":
             points = [(pose[0], pose[1])] + list(move.points[1:])
+            margin = float(self.param("path_clearance_margin"))
+            sweep = self.checker.sweep_radius() + margin
             try:
                 move.path = SmoothPath(
-                    points, move.yaw,
-                    lambda x, y: not self.checker.pose_collides(
-                        x, y, move.yaw,
-                        margin=float(self.param("path_clearance_margin"))),
+                    points, move.yaw_start,
+                    lambda x, y, yaw: not self.checker.pose_collides(
+                        x, y, yaw, margin=margin),
                     float(self.param("max_speed")), float(self.param("max_accel")),
                     float(self.param("max_lateral_accel")),
-                    self.direction_speed_limit, start_speed=self.speed,
+                    self.speed_limit, start_speed=self.speed,
                     max_radius=float(self.param("fillet_max_radius")),
-                    shortcut=bool(self.param("shortcut")))
+                    shortcut=bool(self.param("shortcut")), yaw_end=move.yaw,
+                    rotation_clear=lambda x, y: self.checker.circle_clear(x, y, sweep),
+                    rotation_length=float(self.param("rotation_length_max")),
+                    rotation_min_length=float(self.param("rotation_length_min")),
+                    max_yaw_rate=float(self.param("max_yaw_rate")),
+                    max_yaw_accel=float(self.param("max_yaw_accel")))
             except (ValueError, ZeroDivisionError) as error:
                 self.fail(f"path smoothing failed: {error}")
                 return False
             path = move.path
             self.publish_path([(s[0], s[1]) for s in path.samples[::5]]
                               + [path.goal])
+            turn = (f", turn in s=[{path.rotation_section[0]:.2f}, "
+                    f"{path.rotation_section[1]:.2f}] m" if path.rotation_section else "")
             self.get_logger().info(
                 f"path {move.label or ''}: {len(path.corners)} corners after "
                 f"shortcut, fillet radii {path.radii}, length {path.length:.2f} m, "
-                f"planned {path.planned_time():.2f} s")
+                f"planned {path.planned_time():.2f} s{turn}")
             self.publish_target(path.goal[0], path.goal[1], move.yaw)
         else:
             self.publish_target(move.hold[0], move.hold[1], move.yaw)
@@ -416,6 +435,8 @@ class SakuraMission(Node):
                 ahead = max(0.01, self.speed * float(self.param("lookahead_time")))
                 j = path.sample_at(s + ahead)
                 v_ff = path.speed[j]
+                yaw_ref = path.yaws[j]
+                yaw_ff = v_ff * path.yaw_rate_per_m[j]
                 fx, fy = path.samples[j][2], path.samples[j][3]
                 # lateral (cross-track) correction only, capped
                 ex, ey = px - x, py - y
@@ -436,11 +457,12 @@ class SakuraMission(Node):
                     float(self.param("final_gain")))
                 vx, vy = ((gx - x) / d * speed, (gy - y) / d * speed) if d > 1e-6 \
                     else (0.0, 0.0)
+                yaw_ref, yaw_ff = move.yaw, 0.0
                 self.debug.update(ref_x=gx, ref_y=gy, ref_v=0.0)
-            yaw_err = wrap(move.yaw - yaw)
-            wz = max(-float(self.param("feedback_max_yaw_rate")),
-                     min(float(self.param("feedback_max_yaw_rate")),
-                         float(self.param("yaw_gain")) * yaw_err))
+            yaw_err = wrap(yaw_ref - yaw)
+            wz = yaw_ff + max(-float(self.param("feedback_max_yaw_rate")),
+                              min(float(self.param("feedback_max_yaw_rate")),
+                                  float(self.param("yaw_gain")) * yaw_err))
             target = (gx, gy, move.yaw)
             near_end = remaining <= 0.02
         else:
@@ -459,7 +481,8 @@ class SakuraMission(Node):
             target = (hx, hy, move.yaw)
             near_end = True
             self.debug.update(ref_x=hx, ref_y=hy, ref_v=0.0)
-        self.debug.update(ref_yaw=move.yaw, est_x=x, est_y=y, est_yaw=yaw,
+        self.debug.update(ref_yaw=yaw_ref if move.kind == "path" else move.yaw,
+                          est_x=x, est_y=y, est_yaw=yaw,
                           raw_vx=vx, raw_vy=vy, raw_wz=wz)
 
         vx, vy, wz = self.shaper.shape(vx, vy, wz, self.dt)
@@ -504,9 +527,11 @@ class SakuraMission(Node):
             self.next_state(self.moves[0].label)
         elif self.state == "WAIT_SAKURA_2":
             yaw1 = math.radians(self.param("sakura_rotated_yaw_deg"))
-            travel = math.radians(self.param("travel_yaw_deg"))
-            if abs(wrap(travel - yaw1)) > 1e-3:
-                plan = self.rotation_plan(goal[0], goal[1], yaw1, travel)
+            final = math.radians(self.param("return_yaw_deg"))
+            if self.param("return_rotation") == "moving":
+                self.start_return(yaw1)
+            elif abs(wrap(final - yaw1)) > 1e-3:
+                plan = self.rotation_plan(goal[0], goal[1], yaw1, final)
                 if plan is None:
                     self.fail("no clear place to turn back")
                     return
@@ -517,7 +542,7 @@ class SakuraMission(Node):
                 self.moves = before + [turn]
                 self.next_state(self.moves[0].label)
             else:
-                self.start_return()
+                self.start_return(final)
 
     def after_moves(self):
         if self.state == "GO_SAKURA":
@@ -525,33 +550,30 @@ class SakuraMission(Node):
         elif self.state in ("BACKOFF_1", "ROTATE_1", "REAPPROACH_1"):
             self.next_state("WAIT_SAKURA_2")
         elif self.state in ("BACKOFF_2", "ROTATE_2"):
-            self.start_return()
+            self.start_return(math.radians(self.param("return_yaw_deg")))
         elif self.state == "RETURN":
             self.cmd_pub.publish(Twist())
             self.publish_state(
                 "DONE", f"wheel_speed_limited_steps={self.saturation_steps}")
 
-    def start_return(self):
+    def start_return(self, yaw_start):
+        """Graph route to the return pose; the heading goes from yaw_start to
+        return_yaw_deg (turning along the path when they differ)."""
         pose = self.filtered
-        travel = math.radians(self.param("travel_yaw_deg"))
-        points = self.graph_route(pose, self.param("return_node"))
+        final_yaw = math.radians(self.param("return_yaw_deg"))
+        points = self.graph_route(pose, self.param("return_node"),
+                                  yaws=(yaw_start, final_yaw))
         if points is None:
             self.fail("no route back")
             return
         goal = (float(self.param("return_x")), float(self.param("return_y")))
         if math.hypot(goal[0] - points[-1][0], goal[1] - points[-1][1]) > 1e-3:
             points.append(goal)
-        final_yaw = math.radians(self.param("return_yaw_deg"))
-        move = self.path_move(points, travel, True, label="RETURN")
+        move = self.path_move(points, final_yaw, True, label="RETURN")
+        move.yaw_start = yaw_start
         move.tolerance = float(self.param("return_position_tolerance"))
         move.yaw_tolerance = math.radians(self.param("return_yaw_tolerance_deg"))
         self.moves = [move]
-        if abs(wrap(final_yaw - travel)) > 1e-3:
-            if not self.checker.rotation_clear(goal[0], goal[1], travel, final_yaw):
-                self.fail("return yaw cannot be reached without contact")
-                return
-            self.moves.append(self.rotate_move(goal[0], goal[1], final_yaw,
-                                               label="RETURN"))
         self.next_state("RETURN")
 
     def publish_command(self, vx, vy, wz, yaw):

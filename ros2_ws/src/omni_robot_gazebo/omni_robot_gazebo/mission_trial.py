@@ -9,12 +9,15 @@ Per trial:
   4. compare with the Gazebo ground truth:
      - pose error at the sakura zone before and after the rotation and at
        the return pose (entry into WAIT_SAKURA_1, WAIT_SAKURA_2, DONE),
-     - maximum localization error (TF map->base_footprint vs truth) en route,
-     - wall contact: the outline (max outline + LiDAR) at the true pose
-       overlapping a field frame.
+     - localization error of the control pose the mission used
+       (/mission/debug) vs the truth interpolated at the same time, with the
+       three largest peaks and where they happened,
+     - smallest distance between the outline (max outline + LiDAR) at the
+       true pose and any field frame, and where; 0 = wall contact.
 Writes one CSV row per trial.
 """
 import argparse
+import bisect
 import csv
 import math
 import os
@@ -32,10 +35,8 @@ from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue
 from rcl_interfaces.srv import SetParameters
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
-from rclpy.time import Time
-from std_msgs.msg import String
+from std_msgs.msg import Float64MultiArray, String
 from std_srvs.srv import SetBool
-from tf2_ros import Buffer, TransformException, TransformListener
 
 from omni_robot_description.geometry import load_geometry
 from omni_robot_gazebo.field_layout import load_layout
@@ -77,8 +78,6 @@ class Trial(Node):
             SetParameters, "/sakura_mission/set_parameters")
         self.initial_pub = self.create_publisher(
             PoseWithCovarianceStamped, "/initialpose", 10)
-        self.tf_buffer = Buffer()
-        self.tf_listener = TransformListener(self.tf_buffer, self)
         self.truth = None
         self.state = None
         self.target = None
@@ -91,6 +90,10 @@ class Trial(Node):
         self.create_subscription(String, "/mission/state", self.on_state, LATCHED)
         self.create_subscription(
             PoseStamped, "/mission/target", self.on_target, LATCHED)
+        # control pose actually used by the mission (time-stamped)
+        self.debug = []
+        self.create_subscription(
+            Float64MultiArray, "/mission/debug", self.on_debug, 100)
 
     def now(self):
         return self.get_clock().now().nanoseconds * 1e-9
@@ -102,6 +105,12 @@ class Trial(Node):
         if self.on_truth_sample:
             self.on_truth_sample()
 
+    def on_debug(self, msg):
+        # t, ref_x, ref_y, ref_v, ref_yaw, est_x, est_y, est_yaw, ...
+        d = msg.data
+        self.debug.append((d[0], d[5], d[6], d[7], d[3],
+                           (self.state or "?").split()[0]))
+
     def on_state(self, msg):
         self.state = msg.data
         self.events.append((self.now(), msg.data, self.truth, self.target))
@@ -110,14 +119,6 @@ class Trial(Node):
         p = msg.pose
         self.target = (p.position.x, p.position.y, yaw_of(p.orientation))
         self.targets.append((self.now(), self.target))
-
-    def estimate(self):
-        try:
-            tf = self.tf_buffer.lookup_transform("map", "base_footprint", Time())
-        except TransformException:
-            return None
-        t = tf.transform
-        return t.translation.x, t.translation.y, yaw_of(t.rotation)
 
     def call(self, client, request, timeout=10.0):
         if not client.wait_for_service(timeout_sec=timeout):
@@ -176,6 +177,50 @@ def pose_error(truth, target):
     if truth is None or target is None:
         return None
     return (truth[0] - target[0], truth[1] - target[1], wrap(truth[2] - target[2]))
+
+
+def truth_at(samples, t):
+    """Ground truth (x, y, yaw) linearly interpolated at time t."""
+    times = [s[0] for s in samples]
+    i = bisect.bisect_left(times, t)
+    if i == 0 or i >= len(samples):
+        return None
+    (t0, x0, y0, a0), (t1, x1, y1, a1) = samples[i - 1], samples[i]
+    w = (t - t0) / max(t1 - t0, 1e-9)
+    return (x0 + w * (x1 - x0), y0 + w * (y1 - y0), a0 + w * wrap(a1 - a0))
+
+
+def estimate_errors(node, args):
+    """Control pose used by the mission vs ground truth at the same time.
+
+    Returns (t, error_m, state, true_x, true_y, speed) per control step and
+    optionally writes a time series CSV.
+    """
+    errors = []
+    rows = []
+    previous = None
+    for t, ex, ey, eyaw, ref_v, state in node.debug:
+        truth = truth_at(node.samples, t)
+        if truth is None or math.isnan(ex):
+            continue
+        speed = 0.0
+        if previous is not None and t > previous[0]:
+            speed = math.hypot(truth[0] - previous[1], truth[1] - previous[2]) / (t - previous[0])
+        previous = (t, truth[0], truth[1])
+        error = math.hypot(ex - truth[0], ey - truth[1])
+        errors.append((t, error, state, truth[0], truth[1], speed))
+        rows.append([round(t, 3), state, round(ex, 4), round(ey, 4), round(eyaw, 4),
+                     round(truth[0], 4), round(truth[1], 4), round(truth[2], 4),
+                     round(speed, 3), round(ref_v, 3) if not math.isnan(ref_v) else "",
+                     round(error * 1000, 1)])
+    if args.timeseries:
+        with open(args.timeseries, "w", newline="") as stream:
+            writer = csv.writer(stream)
+            writer.writerow(["t", "state", "est_x", "est_y", "est_yaw", "true_x",
+                             "true_y", "true_yaw", "true_speed", "planned_v",
+                             "est_error_mm"])
+            writer.writerows(rows)
+    return errors
 
 
 SETTLE_STATES = {"GO_SAKURA": "go", "ROTATE_1": "rotate1",
@@ -242,8 +287,9 @@ def run_trial(node, study, start, args, overrides):
     node.events = []
     node.samples = []
     node.targets = []
-    tracking = {"max_est_error": 0.0, "contact": False, "max_speed": 0.0,
-                "contact_at": "", "max_est_at": ""}
+    node.debug = []
+    tracking = {"contact": False, "max_speed": 0.0, "contact_at": "",
+                "min_clearance": float("inf"), "min_clearance_at": ""}
 
     def sample():
         if node.truth is None:
@@ -252,15 +298,14 @@ def run_trial(node, study, start, args, overrides):
         node.samples.append((node.now(), x, y, yaw))
         tracking["max_speed"] = max(tracking["max_speed"], speed)
         state = (node.state or "?").split()[0]
-        if study.collides(x, y, yaw) and not tracking["contact"]:
+        clearance, frame = study.clearance(x, y, yaw)
+        if clearance < tracking["min_clearance"]:
+            tracking["min_clearance"] = clearance
+            tracking["min_clearance_at"] = (
+                f"{state}@({x:.3f},{y:.3f},{math.degrees(yaw):.1f}) {frame}")
+        if clearance <= 0.0 and not tracking["contact"]:
             tracking["contact"] = True
             tracking["contact_at"] = f"{state}@({x:.3f},{y:.3f},{math.degrees(yaw):.1f})"
-        est = node.estimate()
-        if est is not None:
-            error = math.hypot(est[0] - x, est[1] - y)
-            if error > tracking["max_est_error"]:
-                tracking["max_est_error"] = error
-                tracking["max_est_at"] = f"{state}@({x:.3f},{y:.3f})"
 
     node.on_truth_sample = sample
     t0 = node.now()
@@ -326,9 +371,20 @@ def run_trial(node, study, start, args, overrides):
         if abs(math.degrees(err[2])) > args.yaw_tolerance_deg:
             reasons.append(f"{key} yaw error")
     settle_rows(row, node, args)
-    row["max_est_error_mm"] = round(tracking["max_est_error"] * 1000, 1)
+    errors = estimate_errors(node, args)
+    peaks = []
+    for e in sorted(errors, key=lambda e: -e[1]):
+        if all(abs(e[0] - p[0]) > 1.0 for p in peaks):
+            peaks.append(e)
+        if len(peaks) == 3:
+            break
+    row["max_est_error_mm"] = round(peaks[0][1] * 1000, 1) if peaks else ""
+    row["est_error_peaks"] = " | ".join(
+        f"{p[1] * 1000:.0f}mm {p[2]}@({p[3]:.2f},{p[4]:.2f}) v={p[5]:.2f}"
+        for p in peaks)
     row["max_speed"] = round(tracking["max_speed"], 3)
-    row["max_est_error_at"] = tracking["max_est_at"]
+    row["min_wall_clearance_mm"] = round(tracking["min_clearance"] * 1000, 1)
+    row["min_wall_clearance_at"] = tracking["min_clearance_at"]
     row["wall_contact"] = tracking["contact"]
     row["contact_at"] = tracking["contact_at"]
     if tracking["contact"]:
@@ -361,6 +417,8 @@ def main():
     parser.add_argument("--timeout", type=float, default=120.0)
     parser.add_argument("--label", default="")
     parser.add_argument("--csv", default="")
+    parser.add_argument("--timeseries", default="",
+                        help="per control step estimate vs truth (CSV)")
     args = parser.parse_args()
 
     overrides = {}

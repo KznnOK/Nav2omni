@@ -58,6 +58,26 @@ class OccupancyChecker:
                     return True
         return False
 
+    def sweep_radius(self):
+        """Radius of the circle covering the outline at any heading."""
+        return max(math.hypot(px, py) for px, py in self.outline)
+
+    def circle_clear(self, x, y, radius, use_keepout=True):
+        """No occupied cell (or keep-out rectangle) within radius of (x, y)."""
+        reach = radius + self.cell_radius
+        near = self.points[
+            (np.abs(self.points[:, 0] - x) <= reach)
+            & (np.abs(self.points[:, 1] - y) <= reach)]
+        if len(near) and np.min(np.hypot(near[:, 0] - x, near[:, 1] - y)) <= reach:
+            return False
+        if use_keepout:
+            for x0, x1, y0, y1 in self.keepout:
+                dx = max(x0 - x, 0.0, x - x1)
+                dy = max(y0 - y, 0.0, y - y1)
+                if math.hypot(dx, dy) <= radius:
+                    return False
+        return True
+
     def corners(self, x, y, yaw, grow=0.0):
         front, back, left, right = self._half_extents()
         c, s = math.cos(yaw), math.sin(yaw)

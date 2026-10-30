@@ -46,12 +46,33 @@ def polygons_overlap(a, b):
     return True
 
 
+def _point_segment(px, py, ax, ay, bx, by):
+    dx, dy = bx - ax, by - ay
+    length2 = dx * dx + dy * dy
+    t = 0.0 if length2 == 0 else max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / length2))
+    return math.hypot(px - ax - t * dx, py - ay - t * dy)
+
+
+def polygon_distance(a, b):
+    """Distance between two non-overlapping convex polygons."""
+    best = float("inf")
+    for p, q in ((a, b), (b, a)):
+        for px, py in p:
+            for i in range(len(q)):
+                ax, ay = q[i]
+                bx, by = q[(i + 1) % len(q)]
+                best = min(best, _point_segment(px, py, ax, ay, bx, by))
+    return best
+
+
 class Study:
     def __init__(self, geometry, layout, standoff):
         self.geometry = geometry
         self.outline = outline_polygon(geometry)
         self.extents = outline_extents(geometry)
-        self.frames = [rect_polygon(r) for r in frame_rects(layout)]
+        rects = frame_rects(layout)
+        self.frames = [rect_polygon(r) for r in rects]
+        self.frame_names = [r[0] for r in rects]
         dice = _to_world(layout, layout["dice_marker"]["outer"])
         self.dice = rect_polygon(("dice",) + dice)
         self.area1 = zone_world(layout, "area1")
@@ -74,6 +95,26 @@ class Study:
             0.5 * ((self.area1[2] + self.extents["-y"])
                    + (self.area1[3] - self.extents["+y"])),
         )
+
+    def clearance(self, x, y, yaw):
+        """Smallest distance between the outline and any frame (0 = contact)
+        and the name of that frame."""
+        body = transform(self.outline, x, y, yaw)
+        bx = [p[0] for p in body]
+        by = [p[1] for p in body]
+        best, best_name = float("inf"), ""
+        for frame, name in zip(self.frames, self.frame_names):
+            # skip frames that cannot be nearer than the current best
+            gap_x = max(frame[0][0] - max(bx), min(bx) - frame[1][0], 0.0)
+            gap_y = max(frame[0][1] - max(by), min(by) - frame[2][1], 0.0)
+            if math.hypot(gap_x, gap_y) >= best:
+                continue
+            if polygons_overlap(body, frame):
+                return 0.0, name
+            d = polygon_distance(body, frame)
+            if d < best:
+                best, best_name = d, name
+        return best, best_name
 
     def collides(self, x, y, yaw):
         body = transform(self.outline, x, y, yaw)

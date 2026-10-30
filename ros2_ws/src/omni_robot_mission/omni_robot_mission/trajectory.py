@@ -30,13 +30,27 @@ def stopping_speed(distance, decel, gain):
 
 
 class SmoothPath:
+    """See the module docstring. Heading: fixed at yaw_start, or, when
+    yaw_end differs, turned along the path inside one section where
+    rotation_clear(x, y) says the whole turn is free of obstacles (smoothstep
+    profile over at most rotation_length m)."""
 
-    def __init__(self, points, yaw, is_clear_pose, max_speed, max_accel,
-                 max_lateral_accel, direction_speed_limit, start_speed=0.0,
-                 max_radius=0.8, step=0.01, shortcut=True):
-        self.yaw = yaw
+    def __init__(self, points, yaw_start, is_clear_pose, max_speed, max_accel,
+                 max_lateral_accel, speed_limit, start_speed=0.0,
+                 max_radius=0.8, step=0.01, shortcut=True, yaw_end=None,
+                 rotation_clear=None, rotation_length=1.2,
+                 rotation_min_length=0.4, max_yaw_rate=3.0, max_yaw_accel=6.0):
+        self.yaw = yaw_start if yaw_end is None else yaw_end
+        self.yaw_start = yaw_start
         self.max_speed = max_speed
         self.max_accel = max_accel
+        turning = yaw_end is not None and abs(wrap(yaw_end - yaw_start)) > 1e-3
+        headings = (yaw_start, yaw_end) if turning else (yaw_start,)
+        pose_clear = is_clear_pose
+
+        def is_clear_pose(x, y):
+            # geometry must be clear at the start and the end heading
+            return all(pose_clear(x, y, a) for a in headings)
         points = [tuple(p) for p in points]
         # remove duplicates
         cleaned = [points[0]]
@@ -50,7 +64,11 @@ class SmoothPath:
         self.radii = []
         self.samples = self._fillet_and_sample(points, is_clear_pose, max_radius, step)
         self.length = self.samples[-1][5]
-        self._plan_speed(max_lateral_accel, direction_speed_limit, start_speed)
+        self.rotation_section = None
+        self._yaw_profile(turning, yaw_end, rotation_clear, rotation_length,
+                          rotation_min_length)
+        self._plan_speed(max_lateral_accel, speed_limit, start_speed,
+                         max_yaw_rate, max_yaw_accel)
         self.index = 0
 
     # ---------------------------------------------------------------- geometry
@@ -187,15 +205,59 @@ class SmoothPath:
             samples.append(samples[0][:5] + (0.0,))
         return samples
 
+    # ---------------------------------------------------------------- heading
+    def _yaw_profile(self, turning, yaw_end, rotation_clear, length_max,
+                     length_min):
+        n = len(self.samples)
+        self.yaws = [self.yaw_start] * n
+        self.yaw_rate_per_m = [0.0] * n     # dyaw/ds
+        self.yaw_rate_slope = [0.0] * n     # d2yaw/ds2
+        if not turning:
+            return
+        if rotation_clear is None:
+            raise ValueError("turning path needs rotation_clear")
+        flags = [rotation_clear(s[0], s[1]) for s in self.samples]
+        start = None
+        section = None
+        for i, ok in enumerate(flags + [False]):
+            if ok and start is None:
+                start = i
+            if not ok and start is not None:
+                run = self.samples[i - 1][5] - self.samples[start][5]
+                if run >= length_min:
+                    section = (self.samples[start][5],
+                               self.samples[start][5] + min(run, length_max))
+                    break
+                start = None
+        if section is None:
+            raise ValueError("no clear section to turn while moving")
+        self.rotation_section = section
+        delta = wrap(yaw_end - self.yaw_start)
+        s0, s1 = section
+        length = s1 - s0
+        for i, sample in enumerate(self.samples):
+            u = min(1.0, max(0.0, (sample[5] - s0) / length))
+            self.yaws[i] = self.yaw_start + delta * (3 * u * u - 2 * u ** 3)
+            if 0.0 < u < 1.0:
+                self.yaw_rate_per_m[i] = delta * 6 * u * (1 - u) / length
+                self.yaw_rate_slope[i] = delta * 6 * (1 - 2 * u) / length ** 2
+
     # ---------------------------------------------------------------- speed
-    def _plan_speed(self, max_lateral_accel, direction_speed_limit, start_speed):
+    def _plan_speed(self, max_lateral_accel, speed_limit, start_speed,
+                    max_yaw_rate, max_yaw_accel):
         n = len(self.samples)
         limit = []
-        for x, y, tx, ty, curvature, s in self.samples:
+        for i, (x, y, tx, ty, curvature, s) in enumerate(self.samples):
             v = self.max_speed
-            # body-frame direction at the fixed heading
-            direction = math.atan2(ty, tx) - self.yaw
-            v = min(v, direction_speed_limit(direction))
+            # body-frame direction at the planned heading, plus the wheel
+            # speed used by turning (yaw rate = v * dyaw/ds)
+            direction = math.atan2(ty, tx) - self.yaws[i]
+            g = self.yaw_rate_per_m[i]
+            v = min(v, speed_limit(direction, g))
+            if abs(g) > 1e-6:
+                v = min(v, max_yaw_rate / abs(g))
+            if abs(self.yaw_rate_slope[i]) > 1e-6:
+                v = min(v, math.sqrt(max_yaw_accel / abs(self.yaw_rate_slope[i])))
             if curvature > 1e-6:
                 v = min(v, math.sqrt(max_lateral_accel / curvature))
             limit.append(v)
