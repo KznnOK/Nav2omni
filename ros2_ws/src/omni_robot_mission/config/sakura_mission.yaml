@@ -139,4 +139,7 @@ sakura_mission:
     # delivery); move it forward by the /odom twist over its age.
     pose_latency_compensation: true
     pose_latency_max_s: 0.1         # 仮値: ages above this are clamped
+    # false: odometry only (tracking wheels + IMU), map -> odom frozen at the
+    # mission start. For evaluating the odometry alone.
+    use_lidar_correction: true
     control_rate: 50.0              # Hz

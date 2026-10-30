@@ -15,7 +15,9 @@ from launch.substitutions import Command, LaunchConfiguration
 
 
 def spawn_with_sim_errors(context, xacro_file, controllers_file):
-    """Spawn the Gazebo model with the mounting errors of sim_conditions.yaml.
+    """Spawn the Gazebo model with the hardware errors of sim_conditions.yaml
+    (LiDAR and tracking wheel mounting, tracking wheel diameter, drive wheel
+    friction).
 
     robot_state_publisher keeps the nominal description, so the errors stay
     unknown to the robot software as on real hardware.
@@ -31,6 +33,17 @@ def spawn_with_sim_errors(context, xacro_file, controllers_file):
     ]
     for key in ("x", "y", "z", "roll_deg", "pitch_deg", "yaw_deg"):
         args.append(f"lidar_err_{key}:={float(error.get(key, 0.0))}")
+    tracking = conditions.get("tracking_wheel_error", {}) or {}
+    args.append("tracking_diameter_scale:="
+                f"{float(tracking.get('diameter_scale', 1.0))}")
+    for index, wheel in enumerate(tracking.get("wheels", []) or []):
+        args.append(f"tracking_err_x_{index}:={float(wheel.get('dx', 0.0))}")
+        args.append(f"tracking_err_y_{index}:={float(wheel.get('dy', 0.0))}")
+        args.append(f"tracking_err_angle_deg_{index}:="
+                    f"{float(wheel.get('angle_deg', 0.0))}")
+    drive = conditions.get("drive_wheel_error", {}) or {}
+    args.append("drive_mu_rolling_scale:="
+                f"{float(drive.get('mu_rolling_scale', 1.0))}")
     urdf = subprocess.run(args, check=True, capture_output=True,
                           text=True).stdout
     sim_urdf = tempfile.NamedTemporaryFile(

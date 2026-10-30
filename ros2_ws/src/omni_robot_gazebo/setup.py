@@ -77,6 +77,8 @@ setup(
 
         "imu_covariance = "
         "omni_robot_gazebo.imu_covariance:main",
+        "tracking_encoder_sim = "
+        "omni_robot_gazebo.tracking_encoder_sim:main",
 
         "generate_field = "
         "omni_robot_gazebo.field_layout:main",

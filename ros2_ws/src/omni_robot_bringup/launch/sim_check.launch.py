@@ -42,6 +42,7 @@ def generate_launch_description():
     })
     odometry = include_launch("omni_robot_gazebo", "odometry.launch.py", {
         "geometry_file": geometry_file,
+        "sim_conditions": LaunchConfiguration("sim_conditions"),
     })
     localization = include_launch("omni_robot_nav2", "localization.launch.py", {
         "initial_x": x,

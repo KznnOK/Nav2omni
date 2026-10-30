@@ -1,0 +1,26 @@
+lidar_mount_error:
+  x: 0.0
+  y: 0.0
+  z: 0.0
+  roll_deg: 0.0
+  pitch_deg: 0.0
+  yaw_deg: 0.0
+imu_error:
+  gyro_bias_z_deg_s: 0.0
+  gyro_bias_random_walk_deg_s_sqrt_s: 0.0
+  seed: 1
+tracking_wheel_error:
+  diameter_scale: 1.0
+  wheels:
+  - dx: 0.0
+    dy: 0.0
+    angle_deg: 0.0
+  - dx: 0.0
+    dy: 0.0
+    angle_deg: 0.0
+  quantize: false
+  lift_rate_hz: 0.5
+  lift_duration_s: 0.02
+  seed: 1
+drive_wheel_error:
+  mu_rolling_scale: 1.0

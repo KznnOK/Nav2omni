@@ -141,6 +141,7 @@ class SakuraMission(Node):
         p("correction_rate_xy", 0.3)
         p("correction_rate_yaw_deg", 10.0)
         p("pose_latency_compensation", True)
+        p("use_lidar_correction", True)
         p("pose_latency_max_s", 0.1)
         p("control_rate", 50.0)
 
@@ -163,6 +164,7 @@ class SakuraMission(Node):
         self.speed = 0.0
         self.yaw_rate = 0.0
         self.body_twist = (0.0, 0.0, 0.0)
+        self.frozen_map_odom = None
         self.saturation_steps = 0
         self.shaper = None
         self.filtered = None
@@ -255,6 +257,12 @@ class SakuraMission(Node):
         odom_base = self.odom_pose_now()
         if map_odom is None or odom_base is None:
             return self.filtered
+        # Without LiDAR correction the pose is odometry only, anchored where
+        # the mission started.
+        if reset or self.frozen_map_odom is None:
+            self.frozen_map_odom = map_odom
+        if not self.param("use_lidar_correction"):
+            map_odom = self.frozen_map_odom
         raw = compose(map_odom, odom_base)
         self.debug.update(amcl_x=raw[0], amcl_y=raw[1], amcl_yaw=raw[2])
         if reset or self.filtered is None or self.last_odom_pose is None:

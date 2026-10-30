@@ -44,6 +44,7 @@ class TrackingOdometry(Node):
         self.declare_parameter("base_frame", "base_footprint")
         self.declare_parameter("odom_topic", "/tracking/odom")
         self.declare_parameter("imu_topic", "/imu/data_raw")
+        self.declare_parameter("joint_states_topic", "/joint_states")
         self.declare_parameter("twist_covariance_xy", 1.0e-4)
         self.declare_parameter("twist_covariance_yaw", 1.0e-4)
 
@@ -88,7 +89,8 @@ class TrackingOdometry(Node):
         self.create_subscription(
             Imu, str(self.get_parameter("imu_topic").value), self.imu_callback, 50)
         self.create_subscription(
-            JointState, "/joint_states", self.joint_callback, 50)
+            JointState, str(self.get_parameter("joint_states_topic").value),
+            self.joint_callback, 50)
 
         self.get_logger().info(
             f"Tracking odometry: {self.joint_names} r={self.radius:.4f} "

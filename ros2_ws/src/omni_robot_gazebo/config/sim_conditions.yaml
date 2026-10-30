@@ -1,7 +1,7 @@
 # Simulation-only conditions: errors that exist in the simulated hardware but
-# are unknown to the robot software. The robot's TF keeps the nominal values
-# from robot_geometry.yaml; only the model spawned in Gazebo uses these.
-# Phase 5 adds IMU, tracking wheel and drive slip conditions here.
+# are unknown to the robot software. The robot's TF and parameters keep the
+# nominal values from robot_geometry.yaml; only the model spawned in Gazebo
+# and the simulation-only sensor nodes use these. All zero = ideal hardware.
 
 lidar_mount_error:
   # Offsets are in the nominal sensor frame (x outward, y left, z up).
@@ -11,3 +11,24 @@ lidar_mount_error:
   roll_deg: 0.0    # about the sensor forward axis
   pitch_deg: 0.0   # about the sensor left axis (+ tilts the forward axis down)
   yaw_deg: 0.0
+
+imu_error:
+  # Added to angular_velocity.z by imu_covariance.
+  gyro_bias_z_deg_s: 0.0
+  gyro_bias_random_walk_deg_s_sqrt_s: 0.0   # bias drift (random walk)
+  seed: 1
+
+tracking_wheel_error:
+  # Physical errors of the spawned model.
+  diameter_scale: 1.0          # actual / nominal diameter (both wheels)
+  wheels:                      # same order as robot_geometry.yaml
+    - {dx: 0.0, dy: 0.0, angle_deg: 0.0}
+    - {dx: 0.0, dy: 0.0, angle_deg: 0.0}
+  # Encoder errors (tracking_encoder_sim).
+  quantize: false              # to robot_geometry.yaml encoder_cpr
+  lift_rate_hz: 0.0            # lift-off / slip events per wheel per second
+  lift_duration_s: 0.02        # the reading stops for this long
+  seed: 1
+
+drive_wheel_error:
+  mu_rolling_scale: 1.0        # friction along rolling (slip when lowered)

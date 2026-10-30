@@ -7,6 +7,18 @@
   <xacro:arg name="geometry_file"
     default="$(find omni_robot_description)/config/robot_geometry.yaml"/>
 
+  <!-- Simulation-only hardware errors (sim_conditions.yaml). They change
+       only the model spawned in Gazebo; robot_state_publisher and the robot
+       software keep the nominal values. -->
+  <xacro:arg name="drive_mu_rolling_scale" default="1.0"/>
+  <xacro:arg name="tracking_diameter_scale" default="1.0"/>
+  <xacro:arg name="tracking_err_x_0" default="0.0"/>
+  <xacro:arg name="tracking_err_y_0" default="0.0"/>
+  <xacro:arg name="tracking_err_angle_deg_0" default="0.0"/>
+  <xacro:arg name="tracking_err_x_1" default="0.0"/>
+  <xacro:arg name="tracking_err_y_1" default="0.0"/>
+  <xacro:arg name="tracking_err_angle_deg_1" default="0.0"/>
+
   <!-- All dimensions come from robot_geometry.yaml -->
   <xacro:property name="geom" value="${xacro.load_yaml('$(arg geometry_file)')}"/>
 
@@ -159,7 +171,7 @@
            where z is the axle. The axle does not turn while the wheel spins,
            so mu1 stays along the free rollers and mu2 along rolling. -->
       <mu1>${geom['drive_wheels']['mu_axle']}</mu1>
-      <mu2>${geom['drive_wheels']['mu_rolling']}</mu2>
+      <mu2>${geom['drive_wheels']['mu_rolling'] * $(arg drive_mu_rolling_scale)}</mu2>
       <fdir1>0 0 1</fdir1>
 
       <kp>1000000.0</kp>
@@ -182,7 +194,12 @@
        would sink spring_preload / spring_stiffness into the floor, so on the
        floor the spring presses it down with about spring_preload. -->
 
-  <xacro:property name="tw_radius" value="${0.5 * tracking['diameter']}"/>
+  <xacro:property name="tw_radius"
+    value="${0.5 * tracking['diameter'] * $(arg tracking_diameter_scale)}"/>
+  <!-- per wheel [dx, dy, dangle_deg] (simulation-only mounting errors) -->
+  <xacro:property name="tw_errors" value="${[
+    [$(arg tracking_err_x_0), $(arg tracking_err_y_0), $(arg tracking_err_angle_deg_0)],
+    [$(arg tracking_err_x_1), $(arg tracking_err_y_1), $(arg tracking_err_angle_deg_1)]]}"/>
   <xacro:property name="tw_width" value="${tracking['width']}"/>
   <xacro:property name="tw_preload_depth"
     value="${tracking['spring_preload'] / tracking['spring_stiffness']}"/>
@@ -191,6 +208,7 @@
 
     <xacro:property name="wheel" value="${tracking['wheels'][index]}"/>
     <xacro:property name="name" value="${wheel['name']}"/>
+    <xacro:property name="err" value="${tw_errors[index]}"/>
 
     <link name="${name}_mount">
       <inertial>
@@ -204,8 +222,8 @@
       <parent link="base_link"/>
       <child link="${name}_mount"/>
       <origin
-        xyz="${wheel['xy'][0]} ${wheel['xy'][1]} ${tw_radius - tw_preload_depth - base_center_z}"
-        rpy="0 0 ${radians(wheel['rolling_deg'])}"/>
+        xyz="${wheel['xy'][0] + err[0]} ${wheel['xy'][1] + err[1]} ${tw_radius - tw_preload_depth - base_center_z}"
+        rpy="0 0 ${radians(wheel['rolling_deg'] + err[2])}"/>
       <axis xyz="0 0 1"/>
       <limit lower="${-tracking['travel']}" upper="${tracking['travel']}"
         effort="1000.0" velocity="1.0"/>
