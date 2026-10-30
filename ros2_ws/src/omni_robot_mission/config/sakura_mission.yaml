@@ -88,7 +88,9 @@ sakura_mission:
     clearance_margin: 0.02          # 仮値: margin for graph edges, rotation and back-off checks
     # Shortcuts and arcs keep this much more room to the walls, for tracking
     # and localization errors at speed.
-    path_clearance_margin: 0.06     # 仮値
+    # 0.15: field tolerance +-5 % (10.2) + localization peak ~40 mm + tracking
+    # ~25 mm + fittings (仮 20 mm). Revisit after measuring the real frames.
+    path_clearance_margin: 0.15     # 仮値
 
     # --- tolerances -------------------------------------------------------
     position_tolerance: 0.05        # +-50 mm per axis at the sakura zone
@@ -129,4 +131,8 @@ sakura_mission:
     # AMCL corrections are blended into the control pose at these rates.
     correction_rate_xy: 0.3         # m/s (仮値)
     correction_rate_yaw_deg: 10.0   # deg/s (仮値)
+    # The latest odom -> base_footprint TF is up to one EKF period old (plus
+    # delivery); move it forward by the /odom twist over its age.
+    pose_latency_compensation: true
+    pose_latency_max_s: 0.1         # 仮値: ages above this are clamped
     control_rate: 50.0              # Hz

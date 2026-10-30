@@ -47,7 +47,7 @@ from omni_robot_mission.trajectory import (
 DEBUG_FIELDS = ["ref_x", "ref_y", "ref_v", "ref_yaw", "est_x", "est_y",
                 "est_yaw", "raw_vx", "raw_vy", "raw_wz", "cmd_vx", "cmd_vy",
                 "cmd_wz", "body_vx", "body_vy", "wheel_scale", "amcl_x",
-                "amcl_y", "amcl_yaw"]
+                "amcl_y", "amcl_yaw", "pose_age"]
 
 LATCHED = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                      durability=DurabilityPolicy.TRANSIENT_LOCAL)
@@ -113,7 +113,7 @@ class SakuraMission(Node):
         p("rotation_backoff_direction", [1.0, 0.0])
         p("rotation_backoff_max", 0.5)
         p("clearance_margin", 0.02)
-        p("path_clearance_margin", 0.06)
+        p("path_clearance_margin", 0.15)
         p("position_tolerance", 0.05)
         p("yaw_tolerance_deg", 2.0)
         p("return_position_tolerance", 0.05)
@@ -140,6 +140,8 @@ class SakuraMission(Node):
         p("command_accel_ratio", 1.3)
         p("correction_rate_xy", 0.3)
         p("correction_rate_yaw_deg", 10.0)
+        p("pose_latency_compensation", True)
+        p("pose_latency_max_s", 0.1)
         p("control_rate", 50.0)
 
         self.geometry = load_geometry(self.get_parameter("geometry_file").value)
@@ -160,6 +162,7 @@ class SakuraMission(Node):
         self.move = None
         self.speed = 0.0
         self.yaw_rate = 0.0
+        self.body_twist = (0.0, 0.0, 0.0)
         self.saturation_steps = 0
         self.shaper = None
         self.filtered = None
@@ -207,6 +210,7 @@ class SakuraMission(Node):
         t = msg.twist.twist
         self.speed = math.hypot(t.linear.x, t.linear.y)
         self.yaw_rate = t.angular.z
+        self.body_twist = (t.linear.x, t.linear.y, t.angular.z)
 
     def on_enabled(self, msg):
         if msg.data and not self.enabled:
@@ -219,17 +223,36 @@ class SakuraMission(Node):
             self.moves, self.move = [], None
             self.cmd_pub.publish(Twist())
 
-    def lookup(self, parent, child):
+    def lookup(self, parent, child, with_stamp=False):
         try:
-            t = self.tf_buffer.lookup_transform(parent, child, Time()).transform
+            msg = self.tf_buffer.lookup_transform(parent, child, Time())
         except TransformException:
             return None
-        return t.translation.x, t.translation.y, yaw_of(t.rotation)
+        t = msg.transform
+        pose = (t.translation.x, t.translation.y, yaw_of(t.rotation))
+        if with_stamp:
+            return pose, Time.from_msg(msg.header.stamp)
+        return pose
+
+    def odom_pose_now(self):
+        """odom -> base_footprint, moved forward by the odometry twist over
+        the age of the latest transform (EKF period + delivery)."""
+        found = self.lookup("odom", "base_footprint", with_stamp=True)
+        if found is None:
+            return None
+        pose, stamp = found
+        if not self.param("pose_latency_compensation"):
+            return pose
+        age = (self.get_clock().now() - stamp).nanoseconds * 1e-9
+        age = max(0.0, min(float(self.param("pose_latency_max_s")), age))
+        self.debug.update(pose_age=age)
+        vx, vy, wz = self.body_twist
+        return compose(pose, (vx * age, vy * age, wz * age))
 
     def update_pose(self, reset=False):
         """Control pose: odometry motion + AMCL correction at a limited rate."""
         map_odom = self.lookup("map", "odom")
-        odom_base = self.lookup("odom", "base_footprint")
+        odom_base = self.odom_pose_now()
         if map_odom is None or odom_base is None:
             return self.filtered
         raw = compose(map_odom, odom_base)
