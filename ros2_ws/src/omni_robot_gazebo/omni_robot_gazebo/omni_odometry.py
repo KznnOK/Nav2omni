@@ -87,7 +87,8 @@ class OmniOdometry(Node):
         self.timer = self.create_timer(1.0 / publish_rate, self.update)
 
         self.get_logger().info(
-            "Omni odometry started: /joint_states -> /odom and odom -> base_footprint"
+            f"Omni odometry started: /joint_states -> "
+            f"{self.get_parameter('odom_topic').value} (tf={self.publish_tf})"
         )
 
     def joint_state_callback(self, msg: JointState):

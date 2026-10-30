@@ -45,6 +45,12 @@ def generate_launch_description():
         "wheel_geometry.yaml",
     )
 
+    gazebo_params_file = os.path.join(
+        gazebo_share,
+        "config",
+        "gazebo_ros.yaml",
+    )
+
     model_path = os.path.join(
         gazebo_share,
         "models"
@@ -76,6 +82,7 @@ def generate_launch_description():
         launch_arguments={
             "world": world_file,
             "verbose": "true",
+            "params_file": gazebo_params_file,
         }.items(),
     )
 

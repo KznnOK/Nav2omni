@@ -62,7 +62,7 @@ class MissionManager(Node):
         self.declare_parameter("drop_x", -0.6351846679129013)
         self.declare_parameter("drop_y", -2.2289173701157674)
         self.declare_parameter("drop_yaw", math.pi)
-        self.declare_parameter("narrow_exit_x", -1.35)
+        self.declare_parameter("narrow_exit_x", -1.55)
         self.declare_parameter("narrow_exit_y", -3.136311120883107)
         self.declare_parameter("narrow_speed", 0.08)
         self.declare_parameter("narrow_timeout_s", 35.0)

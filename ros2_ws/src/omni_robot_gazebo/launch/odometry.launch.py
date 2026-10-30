@@ -30,5 +30,7 @@ def generate_launch_description():
             name="ekf_filter_node",
             output="screen",
             parameters=[ekf_file, {"use_sim_time": True}],
+            # Nav2 (bt_navigator, controller_server) and mission_manager read /odom.
+            remappings=[("odometry/filtered", "/odom")],
         ),
     ])

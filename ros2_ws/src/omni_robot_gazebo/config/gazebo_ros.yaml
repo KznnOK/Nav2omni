@@ -1,0 +1,6 @@
+# Parameters for the gazebo_ros node (libgazebo_ros_init.so).
+# /clock defaults to 10 Hz, which caps every use_sim_time timer (EKF, odometry)
+# at about 10 Hz. 200 Hz lets 50-100 Hz nodes run at their configured rates.
+gazebo:
+  ros__parameters:
+    publish_rate: 200.0
