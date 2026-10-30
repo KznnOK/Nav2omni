@@ -9,7 +9,9 @@ ekf_filter_node:
     odom_frame: odom
     base_link_frame: base_footprint
     world_frame: odom
-    odom0: /wheel/odom
+    # Tracking-wheel odometry (vx, vy). The drive-wheel odometry /wheel/odom
+    # is still published for comparison but is not fused.
+    odom0: /tracking/odom
     odom0_config: [false, false, false,
                    false, false, false,
                    true, true, false,

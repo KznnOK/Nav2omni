@@ -1,0 +1,11 @@
+name,x,y,yaw_deg,x_wall_points,y_wall_points,unmatched_points,nearest_return_m
+start_dice_front,-1.025,-3.112,0.0,16,688,0,0.1
+exit_area1,-1.025,-2.2,0.0,205,499,0,0.822
+below_l_left,-2.55,-2.2,0.0,139,565,0,0.249
+zigzag_low,-2.55,-0.35,0.0,420,284,0,0.475
+zigzag_shift,-2.75,-0.35,0.0,350,354,0,0.319
+zigzag_high,-2.75,0.6,0.0,429,275,0,0.379
+sakura_before_rotation,-2.662,1.774,0.0,416,288,0,0.41
+rotation_point_0deg,-2.55,1.774,0.0,444,260,0,0.495
+rotation_point_90deg,-2.55,1.774,90.0,520,184,0,0.37
+sakura_after_rotation,-2.662,1.774,90.0,474,230,0,0.482

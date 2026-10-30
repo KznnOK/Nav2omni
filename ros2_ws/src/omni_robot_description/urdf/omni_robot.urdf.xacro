@@ -24,8 +24,11 @@
   <xacro:property name="wheel_z" value="${wheel_radius - base_center_z}"/>
   <xacro:property name="max_wheel_speed" value="${geom['drive_wheels']['max_wheel_speed']}"/>
 
+  <xacro:property name="tracking" value="${geom['tracking_wheels']}"/>
+
   <!-- Chassis carries the remaining mass -->
-  <xacro:property name="base_mass" value="${geom['mass']['total'] - 4 * wheel_mass}"/>
+  <xacro:property name="base_mass"
+    value="${geom['mass']['total'] - 4 * wheel_mass - len(tracking['wheels']) * (tracking['wheel_mass'] + tracking['mount_mass'])}"/>
 
   <!-- base_footprint on the floor, below the robot center -->
 
@@ -173,6 +176,99 @@
   <xacro:wheel index="1"/>
   <xacro:wheel index="2"/>
   <xacro:wheel index="3"/>
+
+  <!-- Passive measuring (tracking) omni wheels. Each one hangs from a
+       vertical prismatic joint with a spring. At joint position 0 the wheel
+       would sink spring_preload / spring_stiffness into the floor, so on the
+       floor the spring presses it down with about spring_preload. -->
+
+  <xacro:property name="tw_radius" value="${0.5 * tracking['diameter']}"/>
+  <xacro:property name="tw_width" value="${tracking['width']}"/>
+  <xacro:property name="tw_preload_depth"
+    value="${tracking['spring_preload'] / tracking['spring_stiffness']}"/>
+
+  <xacro:macro name="tracking_wheel" params="index">
+
+    <xacro:property name="wheel" value="${tracking['wheels'][index]}"/>
+    <xacro:property name="name" value="${wheel['name']}"/>
+
+    <link name="${name}_mount">
+      <inertial>
+        <mass value="${tracking['mount_mass']}"/>
+        <inertia ixx="1e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="1e-5"/>
+      </inertial>
+    </link>
+
+    <!-- Local x is the measuring (rolling) direction -->
+    <joint name="${name}_spring_joint" type="prismatic">
+      <parent link="base_link"/>
+      <child link="${name}_mount"/>
+      <origin
+        xyz="${wheel['xy'][0]} ${wheel['xy'][1]} ${tw_radius - tw_preload_depth - base_center_z}"
+        rpy="0 0 ${radians(wheel['rolling_deg'])}"/>
+      <axis xyz="0 0 1"/>
+      <limit lower="${-tracking['travel']}" upper="${tracking['travel']}"
+        effort="1000.0" velocity="1.0"/>
+      <dynamics damping="${tracking['spring_damping']}" friction="0.0"/>
+    </joint>
+
+    <gazebo reference="${name}_spring_joint">
+      <springStiffness>${tracking['spring_stiffness']}</springStiffness>
+      <springReference>0.0</springReference>
+      <implicitSpringDamper>true</implicitSpringDamper>
+    </gazebo>
+
+    <link name="${name}_wheel">
+      <visual>
+        <origin xyz="0 0 0" rpy="${pi / 2} 0 0"/>
+        <geometry>
+          <cylinder radius="${tw_radius}" length="${tw_width}"/>
+        </geometry>
+        <material name="orange">
+          <color rgba="1.0 0.5 0.0 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${pi / 2} 0 0"/>
+        <geometry>
+          <cylinder radius="${tw_radius}" length="${tw_width}"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <mass value="${tracking['wheel_mass']}"/>
+        <inertia
+          ixx="${tracking['wheel_mass'] * (3 * tw_radius**2 + tw_width**2) / 12.0}"
+          ixy="0" ixz="0"
+          iyy="${tracking['wheel_mass'] * tw_radius**2 / 2.0}"
+          iyz="0"
+          izz="${tracking['wheel_mass'] * (3 * tw_radius**2 + tw_width**2) / 12.0}"/>
+      </inertial>
+    </link>
+
+    <joint name="${name}_wheel_joint" type="continuous">
+      <parent link="${name}_mount"/>
+      <child link="${name}_wheel"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <dynamics damping="0.0" friction="0.0"/>
+    </joint>
+
+    <gazebo reference="${name}_wheel">
+      <material>Gazebo/Orange</material>
+      <!-- Same omni approximation as the drive wheels (collision z = axle) -->
+      <mu1>${tracking['mu_axle']}</mu1>
+      <mu2>${tracking['mu_rolling']}</mu2>
+      <fdir1>0 0 1</fdir1>
+      <kp>1000000.0</kp>
+      <kd>10.0</kd>
+      <minDepth>0.001</minDepth>
+      <maxVel>0.1</maxVel>
+    </gazebo>
+
+  </xacro:macro>
+
+  <xacro:tracking_wheel index="0"/>
+  <xacro:tracking_wheel index="1"/>
 
   <!-- LiDAR (Hokuyo UTM-30LX-EW). Mounting from robot_geometry.yaml.
        lidar_mount_link is the nominal pose (what the robot believes).
@@ -381,6 +477,16 @@
     </joint>
   </xacro:macro>
 
+  <xacro:macro name="tracking_joints" params="index">
+    <joint name="${tracking['wheels'][index]['name']}_wheel_joint">
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="${tracking['wheels'][index]['name']}_spring_joint">
+      <state_interface name="position"/>
+    </joint>
+  </xacro:macro>
+
   <ros2_control name="GazeboSystem" type="system">
 
     <hardware>
@@ -391,6 +497,10 @@
     <xacro:velocity_joint index="1"/>
     <xacro:velocity_joint index="2"/>
     <xacro:velocity_joint index="3"/>
+
+    <!-- Passive tracking wheels: state only (encoders, spring travel) -->
+    <xacro:tracking_joints index="0"/>
+    <xacro:tracking_joints index="1"/>
 
   </ros2_control>
 

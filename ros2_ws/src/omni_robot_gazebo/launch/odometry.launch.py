@@ -22,6 +22,14 @@ def generate_launch_description():
             output="screen",
             parameters=[{"use_sim_time": True}],
         ),
+        # Tracking wheels + IMU yaw rate: the odometry fused by the EKF.
+        Node(
+            package="omni_robot_odometry",
+            executable="tracking_odometry",
+            name="tracking_odometry",
+            output="screen",
+            parameters=[{"use_sim_time": True}],
+        ),
         Node(
             package="robot_localization",
             executable="ekf_node",

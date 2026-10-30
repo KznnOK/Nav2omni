@@ -1,0 +1,10 @@
+label,source,final_position_error_m,final_yaw_error_deg,max_position_error_m,max_yaw_error_deg
+run1,/tracking/odom,0.0114,0.748,0.032,1.512
+run1,/wheel/odom,0.8673,28.798,1.0744,50.585
+run1,/odom,0.0106,0.786,0.0321,4.143
+run2,/tracking/odom,0.0124,0.656,0.0314,1.296
+run2,/wheel/odom,0.9143,23.79,1.0676,34.677
+run2,/odom,0.0121,0.602,0.0318,4.387
+run3,/tracking/odom,0.0119,1.454,0.0348,2.214
+run3,/wheel/odom,0.797,12.966,0.9991,37.891
+run3,/odom,0.0119,1.456,0.0352,4.699

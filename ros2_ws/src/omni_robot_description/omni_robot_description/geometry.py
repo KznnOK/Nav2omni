@@ -44,6 +44,18 @@ def drive_wheel_radius(geometry):
     return 0.5 * float(geometry["drive_wheels"]["diameter"])
 
 
+def tracking_wheel_layout(geometry):
+    """Return joint names, radius, x, y and measuring direction (rad)."""
+    tracking = geometry["tracking_wheels"]
+    names, xs, ys, angles = [], [], [], []
+    for wheel in tracking["wheels"]:
+        names.append(f"{wheel['name']}_wheel_joint")
+        xs.append(float(wheel["xy"][0]))
+        ys.append(float(wheel["xy"][1]))
+        angles.append(math.radians(float(wheel["rolling_deg"])))
+    return names, 0.5 * float(tracking["diameter"]), xs, ys, angles
+
+
 def footprint_string(geometry):
     """Nav2 footprint polygon from the maximum outline."""
     half_l = 0.5 * float(geometry["max_outline"]["length"])

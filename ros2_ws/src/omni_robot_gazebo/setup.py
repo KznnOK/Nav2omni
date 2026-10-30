@@ -83,6 +83,9 @@ setup(
 
         "scan_visibility_check = "
         "omni_robot_gazebo.scan_visibility_check:main",
+
+        "odometry_comparison = "
+        "omni_robot_gazebo.odometry_comparison:main",
         ],
     },
 )

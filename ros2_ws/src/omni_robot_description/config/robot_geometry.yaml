@@ -44,6 +44,26 @@ drive_wheels:
   velocity_pid: {kp: 2.0, ki: 20.0, kd: 0.0, max_integral_error: 2.0}
   geometry_confirmed: true  # real_wheel_geometry_confirmed
 
+tracking_wheels:
+  # Passive omni measuring wheels, independent of the drive wheels, pressed
+  # onto the floor by a spring (prismatic joint + spring in Gazebo).
+  diameter: 0.050           # 仮値
+  width: 0.020              # 仮値
+  wheel_mass: 0.05          # 仮値
+  mount_mass: 0.05          # 仮値: moving part of the spring mount
+  encoder_cpr: 4096         # 仮値: counts per wheel revolution (used in phase 5)
+  spring_stiffness: 2000.0  # 仮値: N/m
+  spring_preload: 15.0      # 仮値: N pressing force at the nominal height
+  spring_damping: 20.0      # 仮値: N*s/m
+  travel: 0.015             # 仮値: +- spring travel
+  mu_rolling: 1.0           # 仮値
+  mu_axle: 0.02             # 仮値
+  # rolling_deg: measuring direction in base_link (0 = +x, 90 = +y).
+  # xy: wheel contact position relative to the robot center.
+  wheels:
+    - {name: tracking_y, rolling_deg: 90.0, xy: [0.06, 0.0]}    # 仮値: (x1, y1), measures d1
+    - {name: tracking_x, rolling_deg: 0.0, xy: [0.0, -0.06]}    # 仮値: (x2, y2), measures d2
+
 imu:
   xyz: [0.0, 0.0, 0.0]      # 仮値: relative to base_link
 
