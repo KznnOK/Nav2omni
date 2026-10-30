@@ -2,11 +2,12 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable
+from launch.actions import (
+    DeclareLaunchArgument, IncludeLaunchDescription, SetEnvironmentVariable)
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
-from launch.substitutions import Command
+from launch.substitutions import Command, LaunchConfiguration
 
 
 def generate_launch_description():
@@ -40,9 +41,9 @@ def generate_launch_description():
         "omni_controllers.yaml"
     )
     geometry_file = os.path.join(
-        gazebo_share,
+        description_share,
         "config",
-        "wheel_geometry.yaml",
+        "robot_geometry.yaml",
     )
 
     gazebo_params_file = os.path.join(
@@ -67,6 +68,8 @@ def generate_launch_description():
             xacro_file,
             " controllers_file:=",
             controllers_file,
+            " geometry_file:=",
+            geometry_file,
         ]),
         value_type=str,
     )
@@ -83,6 +86,7 @@ def generate_launch_description():
             "world": world_file,
             "verbose": "true",
             "params_file": gazebo_params_file,
+            "gui": LaunchConfiguration("gui"),
         }.items(),
     )
 
@@ -108,13 +112,13 @@ def generate_launch_description():
             "-topic",
             "robot_description",
             "-x",
-            "-3.1510900301327864",
+            LaunchConfiguration("spawn_x"),
             "-y",
-            "-3.136311120883107",
+            LaunchConfiguration("spawn_y"),
             "-z",
-            "0.25",
+            LaunchConfiguration("spawn_z"),
             "-Y",
-            "0.0",
+            LaunchConfiguration("spawn_yaw"),
         ],
     )
 
@@ -152,11 +156,16 @@ def generate_launch_description():
             {
                 "use_sim_time": True,
             },
-            geometry_file,
         ],
     )
 
     return LaunchDescription([
+        # Default spawn pose: the original start zone pose.
+        DeclareLaunchArgument("spawn_x", default_value="-3.1510900301327864"),
+        DeclareLaunchArgument("spawn_y", default_value="-3.136311120883107"),
+        DeclareLaunchArgument("spawn_z", default_value="0.02"),
+        DeclareLaunchArgument("spawn_yaw", default_value="0.0"),
+        DeclareLaunchArgument("gui", default_value="true"),
         SetEnvironmentVariable(
             "GAZEBO_MODEL_PATH",
             model_path

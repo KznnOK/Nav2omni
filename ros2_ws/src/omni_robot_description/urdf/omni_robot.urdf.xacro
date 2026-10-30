@@ -1,31 +1,43 @@
 <?xml version="1.0"?>
 <robot name="omni_robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!-- Comments must not contain colon-space. gazebo_ros2_control parses the
+       whole description as a YAML parameter value. -->
 
   <xacro:arg name="controllers_file" default=""/>
+  <xacro:arg name="geometry_file"
+    default="$(find omni_robot_description)/config/robot_geometry.yaml"/>
 
-  <!-- Base parameters -->
-  <xacro:property name="base_length" value="0.5"/>
-  <xacro:property name="base_width" value="0.5"/>
-  <xacro:property name="base_height" value="0.15"/>
-  <xacro:property name="base_mass" value="20.0"/>
+  <!-- All dimensions come from robot_geometry.yaml -->
+  <xacro:property name="geom" value="${xacro.load_yaml('$(arg geometry_file)')}"/>
 
-  <!-- Wheel parameters -->
-  <xacro:property name="wheel_radius" value="0.05"/>
-  <xacro:property name="wheel_width" value="0.03"/>
-  <xacro:property name="wheel_mass" value="0.5"/>
-  <xacro:property name="wheel_z" value="-0.075"/>
+  <xacro:property name="base_length" value="${geom['chassis']['length']}"/>
+  <xacro:property name="base_width" value="${geom['chassis']['width']}"/>
+  <xacro:property name="base_height" value="${geom['chassis']['height']}"/>
+  <xacro:property name="base_center_z"
+    value="${geom['chassis']['ground_clearance'] + 0.5 * base_height}"/>
 
-  <!-- base_footprint -->
+  <xacro:property name="wheel_radius" value="${0.5 * geom['drive_wheels']['diameter']}"/>
+  <xacro:property name="wheel_width" value="${geom['drive_wheels']['width']}"/>
+  <xacro:property name="wheel_mass" value="${geom['mass']['drive_wheel']}"/>
+  <xacro:property name="wheel_distance" value="${geom['drive_wheels']['center_distance']}"/>
+  <!-- Wheel axle height relative to base_link (base_footprint is on the floor) -->
+  <xacro:property name="wheel_z" value="${wheel_radius - base_center_z}"/>
+  <xacro:property name="max_wheel_speed" value="${geom['drive_wheels']['max_wheel_speed']}"/>
+
+  <!-- Chassis carries the remaining mass -->
+  <xacro:property name="base_mass" value="${geom['mass']['total'] - 4 * wheel_mass}"/>
+
+  <!-- base_footprint on the floor, below the robot center -->
 
   <link name="base_footprint"/>
 
   <joint name="base_footprint_joint" type="fixed">
     <parent link="base_footprint"/>
     <child link="base_link"/>
-    <origin xyz="0 0 0.075" rpy="0 0 0"/>
+    <origin xyz="0 0 ${base_center_z}" rpy="0 0 0"/>
   </joint>
 
-  <!-- base_link -->
+  <!-- base_link at the chassis center -->
 
   <link name="base_link">
 
@@ -49,13 +61,14 @@
       <mass value="${base_mass}"/>
       <origin xyz="0 0 0" rpy="0 0 0"/>
 
+      <!-- Solid box -->
       <inertia
-        ixx="0.6375"
+        ixx="${base_mass * (base_width**2 + base_height**2) / 12.0}"
         ixy="0.0"
         ixz="0.0"
-        iyy="0.6375"
+        iyy="${base_mass * (base_length**2 + base_height**2) / 12.0}"
         iyz="0.0"
-        izz="1.2"/>
+        izz="${base_mass * (base_length**2 + base_width**2) / 12.0}"/>
     </inertial>
 
   </link>
@@ -64,14 +77,19 @@
     <material>Gazebo/Blue</material>
   </gazebo>
 
-  <!-- Wheel macro -->
+  <!-- Wheel macro. index selects the entry in robot_geometry.yaml -->
 
-  <xacro:macro name="wheel" params="name x y yaw">
+  <xacro:macro name="wheel" params="index">
+
+    <xacro:property name="name"
+      value="${geom['drive_wheels']['names'][index]}_wheel"/>
+    <xacro:property name="angle"
+      value="${radians(geom['drive_wheels']['position_angles_deg'][index])}"/>
 
     <link name="${name}">
 
       <visual>
-        <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
+        <origin xyz="0 0 0" rpy="${pi / 2} 0 0"/>
 
         <geometry>
           <cylinder
@@ -85,7 +103,7 @@
       </visual>
 
       <collision>
-        <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
+        <origin xyz="0 0 0" rpy="${pi / 2} 0 0"/>
 
         <geometry>
           <cylinder
@@ -98,30 +116,33 @@
         <mass value="${wheel_mass}"/>
         <origin xyz="0 0 0" rpy="0 0 0"/>
 
+        <!-- Solid cylinder, axle along y -->
         <inertia
-          ixx="0.00035"
+          ixx="${wheel_mass * (3 * wheel_radius**2 + wheel_width**2) / 12.0}"
           ixy="0.0"
           ixz="0.0"
-          iyy="0.000625"
+          iyy="${wheel_mass * wheel_radius**2 / 2.0}"
           iyz="0.0"
-          izz="0.00035"/>
+          izz="${wheel_mass * (3 * wheel_radius**2 + wheel_width**2) / 12.0}"/>
       </inertial>
 
     </link>
 
+    <!-- Axle is radial (local y), so the rolling direction is angle - 90 deg.
+         Diagonal wheels share one axle line through the center. -->
     <joint name="${name}_joint" type="continuous">
       <parent link="base_link"/>
       <child link="${name}"/>
 
       <origin
-        xyz="${x} ${y} ${wheel_z}"
-        rpy="0 0 ${yaw}"/>
+        xyz="${wheel_distance * cos(angle)} ${wheel_distance * sin(angle)} ${wheel_z}"
+        rpy="0 0 ${atan2(sin(angle - pi / 2), cos(angle - pi / 2))}"/>
 
       <axis xyz="0 1 0"/>
 
       <limit
-        effort="100.0"
-        velocity="60.0"/>
+        effort="${geom['drive_wheels']['max_wheel_torque']}"
+        velocity="${max_wheel_speed * 1.5}"/>
 
       <dynamics
         damping="0.02"
@@ -131,10 +152,12 @@
     <gazebo reference="${name}">
       <material>Gazebo/Black</material>
 
-      <mu1>1.0</mu1>
-      <mu2>0.02</mu2>
-
-      <fdir1>1 0 0</fdir1>
+      <!-- Omni wheel approximation. fdir1 is given in the collision frame,
+           where z is the axle. The axle does not turn while the wheel spins,
+           so mu1 stays along the free rollers and mu2 along rolling. -->
+      <mu1>${geom['drive_wheels']['mu_axle']}</mu1>
+      <mu2>${geom['drive_wheels']['mu_rolling']}</mu2>
+      <fdir1>0 0 1</fdir1>
 
       <kp>1000000.0</kp>
       <kd>10.0</kd>
@@ -144,31 +167,12 @@
 
   </xacro:macro>
 
-  <!-- Four omni wheels -->
+  <!-- Four omni wheels in X configuration -->
 
-  <xacro:wheel
-    name="front_left_wheel"
-    x="0.20"
-    y="0.20"
-    yaw="-0.78539816339"/>
-
-  <xacro:wheel
-    name="front_right_wheel"
-    x="0.20"
-    y="-0.20"
-    yaw="0.78539816339"/>
-
-  <xacro:wheel
-    name="rear_left_wheel"
-    x="-0.20"
-    y="0.20"
-    yaw="0.78539816339"/>
-
-  <xacro:wheel
-    name="rear_right_wheel"
-    x="-0.20"
-    y="-0.20"
-    yaw="-0.78539816339"/>
+  <xacro:wheel index="0"/>
+  <xacro:wheel index="1"/>
+  <xacro:wheel index="2"/>
+  <xacro:wheel index="3"/>
 
   <!-- Visible LiDAR body -->
 
@@ -265,7 +269,7 @@
   <joint name="imu_joint" type="fixed">
     <parent link="base_link"/>
     <child link="imu_link"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <origin xyz="${geom['imu']['xyz'][0]} ${geom['imu']['xyz'][1]} ${geom['imu']['xyz'][2]}" rpy="0 0 0"/>
   </joint>
 
   <gazebo reference="imu_link">
@@ -327,7 +331,40 @@
     </sensor>
   </gazebo>
 
+  <!-- Ground truth pose of base_footprint (simulation only) -->
+
+  <gazebo>
+    <plugin name="ground_truth_p3d" filename="libgazebo_ros_p3d.so">
+      <ros>
+        <remapping>odom:=ground_truth/odom</remapping>
+      </ros>
+      <body_name>base_footprint</body_name>
+      <frame_name>world</frame_name>
+      <update_rate>100.0</update_rate>
+      <gaussian_noise>0.0</gaussian_noise>
+    </plugin>
+  </gazebo>
+
   <!-- ros2_control -->
+
+  <xacro:macro name="velocity_joint" params="index">
+    <xacro:property name="pid" value="${geom['drive_wheels']['velocity_pid']}"/>
+    <joint name="${geom['drive_wheels']['names'][index]}_wheel_joint">
+      <!-- velocity_pid turns the velocity command into joint torque limited
+           by the joint effort limit, like a motor with a speed controller -->
+      <param name="vel_kp">${pid['kp']}</param>
+      <param name="vel_ki">${pid['ki']}</param>
+      <param name="vel_kd">${pid['kd']}</param>
+      <param name="vel_max_integral_error">${pid['max_integral_error']}</param>
+      <param name="vel_min_integral_error">${-pid['max_integral_error']}</param>
+      <command_interface name="velocity_pid">
+        <param name="min">${-max_wheel_speed * 1.5}</param>
+        <param name="max">${max_wheel_speed * 1.5}</param>
+      </command_interface>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </xacro:macro>
 
   <ros2_control name="GazeboSystem" type="system">
 
@@ -335,53 +372,10 @@
       <plugin>gazebo_ros2_control/GazeboSystem</plugin>
     </hardware>
 
-    <joint name="front_left_wheel_joint">
-
-      <command_interface name="velocity">
-        <param name="min">-60.0</param>
-        <param name="max">60.0</param>
-      </command_interface>
-
-      <state_interface name="position"/>
-      <state_interface name="velocity"/>
-
-    </joint>
-
-    <joint name="front_right_wheel_joint">
-
-      <command_interface name="velocity">
-        <param name="min">-60.0</param>
-        <param name="max">60.0</param>
-      </command_interface>
-
-      <state_interface name="position"/>
-      <state_interface name="velocity"/>
-
-    </joint>
-
-    <joint name="rear_left_wheel_joint">
-
-      <command_interface name="velocity">
-        <param name="min">-60.0</param>
-        <param name="max">60.0</param>
-      </command_interface>
-
-      <state_interface name="position"/>
-      <state_interface name="velocity"/>
-
-    </joint>
-
-    <joint name="rear_right_wheel_joint">
-
-      <command_interface name="velocity">
-        <param name="min">-60.0</param>
-        <param name="max">60.0</param>
-      </command_interface>
-
-      <state_interface name="position"/>
-      <state_interface name="velocity"/>
-
-    </joint>
+    <xacro:velocity_joint index="0"/>
+    <xacro:velocity_joint index="1"/>
+    <xacro:velocity_joint index="2"/>
+    <xacro:velocity_joint index="3"/>
 
   </ros2_control>
 

@@ -28,6 +28,12 @@ setup(
             ],
         ),
         (
+            "share/omni_robot_description/config",
+            [
+                "config/robot_geometry.yaml",
+            ],
+        ),
+        (
             "share/omni_robot_description/urdf",
             [
                 "urdf/omni_robot.urdf.xacro",
@@ -36,6 +42,7 @@ setup(
     ],
     install_requires=[
         "setuptools",
+        "pyyaml",
     ],
     zip_safe=True,
     maintainer="ubuntu",

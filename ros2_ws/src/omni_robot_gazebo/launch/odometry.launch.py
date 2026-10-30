@@ -6,8 +6,6 @@ import os
 
 def generate_launch_description():
     package_share = get_package_share_directory("omni_robot_gazebo")
-    geometry_file = os.path.join(
-        package_share, "config", "wheel_geometry.yaml")
     ekf_file = os.path.join(package_share, "config", "ekf.yaml")
     return LaunchDescription([
         Node(
@@ -22,7 +20,7 @@ def generate_launch_description():
             executable="omni_odometry",
             name="omni_odometry",
             output="screen",
-            parameters=[{"use_sim_time": True}, geometry_file],
+            parameters=[{"use_sim_time": True}],
         ),
         Node(
             package="robot_localization",

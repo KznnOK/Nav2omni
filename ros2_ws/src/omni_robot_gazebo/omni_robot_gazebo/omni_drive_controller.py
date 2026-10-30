@@ -5,6 +5,9 @@ from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from std_msgs.msg import Float64MultiArray
 
+from omni_robot_description.geometry import (
+    drive_wheel_layout, drive_wheel_radius, load_geometry)
+
 
 class OmniDriveController(Node):
     """Convert /cmd_vel into four wheel angular velocity commands."""
@@ -12,16 +15,17 @@ class OmniDriveController(Node):
     def __init__(self):
         super().__init__("omni_drive_controller")
 
-        # Robot parameters
-        self.declare_parameter("wheel_radius", 0.05)
-        self.declare_parameter("wheel_x", [0.20, 0.20, -0.20, -0.20])
-        self.declare_parameter("wheel_y", [0.20, -0.20, 0.20, -0.20])
+        # Robot parameters default to robot_geometry.yaml
+        geometry = load_geometry()
+        _, wheel_x, wheel_y, wheel_yaw = drive_wheel_layout(geometry)
+        self.declare_parameter("wheel_radius", drive_wheel_radius(geometry))
+        self.declare_parameter("wheel_x", wheel_x)
+        self.declare_parameter("wheel_y", wheel_y)
+        self.declare_parameter("wheel_direction_yaw", wheel_yaw)
         self.declare_parameter(
-            "wheel_direction_yaw",
-            [-0.7853981633974483, 0.7853981633974483,
-             0.7853981633974483, -0.7853981633974483],
+            "max_wheel_speed",
+            float(geometry["drive_wheels"]["max_wheel_speed"]),
         )
-        self.declare_parameter("max_wheel_speed", 40.0)
         self.declare_parameter("command_timeout", 0.5)
 
         self.wheel_radius = float(

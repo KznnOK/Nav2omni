@@ -1,6 +1,9 @@
 controller_manager:
   ros__parameters:
-    update_rate: 100
+    # gazebo_ros2_control applies velocity commands with SetVelocity only on
+    # controller updates. Below the 1 kHz physics rate the wheels slow down
+    # between updates under load, so run at the physics rate.
+    update_rate: 1000
     use_sim_time: true
 
     joint_state_broadcaster:

@@ -8,6 +8,9 @@ from rclpy.node import Node
 from sensor_msgs.msg import JointState
 from tf2_ros import TransformBroadcaster
 
+from omni_robot_description.geometry import (
+    drive_wheel_layout, drive_wheel_radius, load_geometry)
+
 
 class OmniOdometry(Node):
     """Estimate planar odometry from four omni-wheel joint velocities."""
@@ -15,23 +18,14 @@ class OmniOdometry(Node):
     def __init__(self):
         super().__init__("omni_odometry")
 
-        self.declare_parameter("wheel_radius", 0.05)
-        self.declare_parameter(
-            "wheel_joint_names",
-            [
-                "front_left_wheel_joint",
-                "front_right_wheel_joint",
-                "rear_left_wheel_joint",
-                "rear_right_wheel_joint",
-            ],
-        )
-        self.declare_parameter("wheel_x", [0.20, 0.20, -0.20, -0.20])
-        self.declare_parameter("wheel_y", [0.20, -0.20, 0.20, -0.20])
-        self.declare_parameter(
-            "wheel_direction_yaw",
-            [-0.7853981633974483, 0.7853981633974483,
-             0.7853981633974483, -0.7853981633974483],
-        )
+        # Defaults come from robot_geometry.yaml
+        geometry = load_geometry()
+        joint_names, wheel_x, wheel_y, wheel_yaw = drive_wheel_layout(geometry)
+        self.declare_parameter("wheel_radius", drive_wheel_radius(geometry))
+        self.declare_parameter("wheel_joint_names", joint_names)
+        self.declare_parameter("wheel_x", wheel_x)
+        self.declare_parameter("wheel_y", wheel_y)
+        self.declare_parameter("wheel_direction_yaw", wheel_yaw)
         self.declare_parameter("odom_frame", "odom")
         self.declare_parameter("base_frame", "base_footprint")
         self.declare_parameter("publish_rate", 50.0)

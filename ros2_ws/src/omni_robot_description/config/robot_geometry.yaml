@@ -1,0 +1,48 @@
+# Single source of truth for the robot dimensions.
+# Read by the URDF (xacro.load_yaml), omni_drive_controller, omni_odometry,
+# tracking_odometry and the Nav2 footprint through
+# omni_robot_description.geometry. Units: m, kg, rad.
+
+chassis:
+  # Drive base (台車) outline. Confirmed: 500 x 500 mm.
+  length: 0.50
+  width: 0.50
+  height: 0.15          # 仮値: chassis box height used for collision/visual
+  # Clearance between floor and chassis bottom.
+  ground_clearance: 0.04  # 仮値
+
+# Maximum outline including the upper mechanisms. Used for collision checks,
+# rotation interference checks and the costmap footprint. Kept separate from
+# the chassis because the upper mechanisms will make the robot larger.
+max_outline:
+  length: 0.50          # 仮値
+  width: 0.50           # 仮値
+
+mass:
+  total: 20.0           # about 20 kg including wheels
+  drive_wheel: 0.40     # 仮値: mass of one drive omni wheel
+
+drive_wheels:
+  # 4-wheel omni in X configuration (45 deg to the chassis faces).
+  # Diagonal wheels share one axle line through the robot center.
+  center_distance: 0.2245   # CAD: robot center to wheel width-center (horizontal)
+  diameter: 0.125
+  width: 0.040
+  # Wheel order matches omni_controllers.yaml.
+  names: [front_left, front_right, rear_left, rear_right]
+  # Direction of each wheel position seen from the robot center.
+  position_angles_deg: [45.0, -45.0, 135.0, -135.0]
+  # Omni wheel friction (Gazebo approximation): along rolling direction and
+  # along the axle (free rollers).
+  mu_rolling: 1.0           # 仮値
+  mu_axle: 0.02             # 仮値
+  # Motor limit. 仮値: real motor specification is not decided yet.
+  max_wheel_speed: 40.0     # rad/s
+  # Simulated motor: velocity PID driving joint torque (gazebo_ros2_control
+  # velocity_pid). 仮値: motor/driver specification is not decided yet.
+  max_wheel_torque: 5.0     # N*m
+  velocity_pid: {kp: 2.0, ki: 20.0, kd: 0.0, max_integral_error: 2.0}
+  geometry_confirmed: true  # real_wheel_geometry_confirmed
+
+imu:
+  xyz: [0.0, 0.0, 0.0]      # 仮値: relative to base_link
