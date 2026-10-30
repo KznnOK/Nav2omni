@@ -1,0 +1,13 @@
+# Simulation-only conditions: errors that exist in the simulated hardware but
+# are unknown to the robot software. The robot's TF keeps the nominal values
+# from robot_geometry.yaml; only the model spawned in Gazebo uses these.
+# Phase 5 adds IMU, tracking wheel and drive slip conditions here.
+
+lidar_mount_error:
+  # Offsets are in the nominal sensor frame (x outward, y left, z up).
+  x: 0.0           # m
+  y: 0.0           # m
+  z: 0.0           # m
+  roll_deg: 0.0    # about the sensor forward axis
+  pitch_deg: 0.0   # about the sensor left axis (+ tilts the forward axis down)
+  yaw_deg: 0.0

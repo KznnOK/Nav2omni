@@ -51,8 +51,17 @@ setup(
             ),
             glob("models/harurobo_field/meshes/*"),
         ),
+        (
+            os.path.join(
+                "share",
+                package_name,
+                "models",
+                "kansai_field_2027",
+            ),
+            glob("models/kansai_field_2027/*.*"),
+        ),
     ],
-    install_requires=["setuptools"],
+    install_requires=["setuptools", "pyyaml"],
     zip_safe=True,
     maintainer="ubuntu",
     maintainer_email="ubuntu@todo.todo",
@@ -68,6 +77,12 @@ setup(
 
         "imu_covariance = "
         "omni_robot_gazebo.imu_covariance:main",
+
+        "generate_field = "
+        "omni_robot_gazebo.field_layout:main",
+
+        "scan_visibility_check = "
+        "omni_robot_gazebo.scan_visibility_check:main",
         ],
     },
 )

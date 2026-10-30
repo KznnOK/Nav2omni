@@ -22,7 +22,12 @@ setup(
             [
                 "launch/simulation.launch.py",
                 "launch/experiment.launch.py",
+                "launch/sim_check.launch.py",
             ],
+        ),
+        (
+            "share/omni_robot_bringup/rviz",
+            ["rviz/sim_check.rviz"],
         ),
     ],
     install_requires=["setuptools"],

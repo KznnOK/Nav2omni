@@ -46,3 +46,20 @@ drive_wheels:
 
 imu:
   xyz: [0.0, 0.0, 0.0]      # 仮値: relative to base_link
+
+lidar:
+  # Hokuyo UTM-30LX-EW
+  samples: 1081             # 270 deg / 0.25 deg + 1
+  fov_deg: 270.0
+  update_rate: 40.0
+  range_min: 0.1
+  range_max: 30.0
+  noise_stddev: 0.01        # 仮値: spec accuracy +-30 mm taken as about 3 sigma
+  body_size: [0.060, 0.060, 0.087]   # visual only
+  # Nominal mounting (what the robot believes; TF uses these values).
+  mount:
+    face: "-y"              # 仮値: chassis face the sensor looks out of (+x, -x, +y, -y)
+    outward_offset: 0.0     # 仮値: scan origin distance outside that face
+    lateral_offset: 0.0     # 仮値: along the face, + is to the left when looking outward
+    scan_height: 0.060      # 仮値: scan plane above the floor (must be < 0.089 frame height)
+    upside_down: false      # true: mounted upside down (roll 180 deg)

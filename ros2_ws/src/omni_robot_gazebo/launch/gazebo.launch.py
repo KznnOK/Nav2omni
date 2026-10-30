@@ -1,13 +1,62 @@
 import os
+import subprocess
+import tempfile
 
+import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (
-    DeclareLaunchArgument, IncludeLaunchDescription, SetEnvironmentVariable)
+    DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction,
+    SetEnvironmentVariable)
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch.substitutions import Command, LaunchConfiguration
+
+
+def spawn_with_sim_errors(context, xacro_file, controllers_file,
+                          geometry_file):
+    """Spawn the Gazebo model with the mounting errors of sim_conditions.yaml.
+
+    robot_state_publisher keeps the nominal description, so the errors stay
+    unknown to the robot software as on real hardware.
+    """
+    with open(LaunchConfiguration("sim_conditions").perform(context)) as f:
+        conditions = yaml.safe_load(f) or {}
+    error = conditions.get("lidar_mount_error", {})
+    args = [
+        "xacro", xacro_file,
+        f"controllers_file:={controllers_file}",
+        f"geometry_file:={geometry_file}",
+    ]
+    for key in ("x", "y", "z", "roll_deg", "pitch_deg", "yaw_deg"):
+        args.append(f"lidar_err_{key}:={float(error.get(key, 0.0))}")
+    urdf = subprocess.run(args, check=True, capture_output=True,
+                          text=True).stdout
+    sim_urdf = tempfile.NamedTemporaryFile(
+        "w", prefix="omni_robot_sim_", suffix=".urdf", delete=False)
+    sim_urdf.write(urdf)
+    sim_urdf.close()
+
+    return [Node(
+        package="gazebo_ros",
+        executable="spawn_entity.py",
+        output="screen",
+        arguments=[
+            "-entity",
+            "omni_robot",
+            "-file",
+            sim_urdf.name,
+            "-x",
+            LaunchConfiguration("spawn_x"),
+            "-y",
+            LaunchConfiguration("spawn_y"),
+            "-z",
+            LaunchConfiguration("spawn_z"),
+            "-Y",
+            LaunchConfiguration("spawn_yaw"),
+        ],
+    )]
 
 
 def generate_launch_description():
@@ -102,24 +151,9 @@ def generate_launch_description():
         ],
     )
 
-    spawn_robot = Node(
-        package="gazebo_ros",
-        executable="spawn_entity.py",
-        output="screen",
-        arguments=[
-            "-entity",
-            "omni_robot",
-            "-topic",
-            "robot_description",
-            "-x",
-            LaunchConfiguration("spawn_x"),
-            "-y",
-            LaunchConfiguration("spawn_y"),
-            "-z",
-            LaunchConfiguration("spawn_z"),
-            "-Y",
-            LaunchConfiguration("spawn_yaw"),
-        ],
+    spawn_robot = OpaqueFunction(
+        function=spawn_with_sim_errors,
+        args=[xacro_file, controllers_file, geometry_file],
     )
 
     joint_state_broadcaster_spawner = Node(
@@ -166,6 +200,11 @@ def generate_launch_description():
         DeclareLaunchArgument("spawn_z", default_value="0.02"),
         DeclareLaunchArgument("spawn_yaw", default_value="0.0"),
         DeclareLaunchArgument("gui", default_value="true"),
+        DeclareLaunchArgument(
+            "sim_conditions",
+            default_value=os.path.join(
+                gazebo_share, "config", "sim_conditions.yaml"),
+        ),
         SetEnvironmentVariable(
             "GAZEBO_MODEL_PATH",
             model_path

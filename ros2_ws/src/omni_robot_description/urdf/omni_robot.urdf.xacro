@@ -174,73 +174,88 @@
   <xacro:wheel index="2"/>
   <xacro:wheel index="3"/>
 
-  <!-- Visible LiDAR body -->
+  <!-- LiDAR (Hokuyo UTM-30LX-EW). Mounting from robot_geometry.yaml.
+       lidar_mount_link is the nominal pose (what the robot believes).
+       lidar_scan_link adds the mounting error, which is non-zero only in
+       the model spawned in Gazebo (sim_conditions.yaml). -->
 
-  <link name="lidar_link">
+  <xacro:property name="lidar" value="${geom['lidar']}"/>
+  <xacro:property name="mount" value="${lidar['mount']}"/>
+  <xacro:property name="face_yaw"
+    value="${0.0 if mount['face'] == '+x' else (pi / 2 if mount['face'] == '+y' else (pi if mount['face'] == '-x' else -pi / 2))}"/>
+  <xacro:property name="face_half"
+    value="${0.5 * base_length if mount['face'] in ('+x', '-x') else 0.5 * base_width}"/>
+  <xacro:property name="lidar_out" value="${face_half + mount['outward_offset']}"/>
+  <xacro:property name="lidar_side" value="${mount['lateral_offset']}"/>
 
-    <visual>
-      <geometry>
-        <cylinder radius="0.04" length="0.05"/>
-      </geometry>
+  <xacro:arg name="lidar_err_x" default="0.0"/>
+  <xacro:arg name="lidar_err_y" default="0.0"/>
+  <xacro:arg name="lidar_err_z" default="0.0"/>
+  <xacro:arg name="lidar_err_roll_deg" default="0.0"/>
+  <xacro:arg name="lidar_err_pitch_deg" default="0.0"/>
+  <xacro:arg name="lidar_err_yaw_deg" default="0.0"/>
 
-      <material name="green">
-        <color rgba="0.0 1.0 0.0 1.0"/>
-      </material>
-    </visual>
+  <link name="lidar_mount_link"/>
 
-  </link>
-
-  <joint name="lidar_joint" type="fixed">
+  <joint name="lidar_mount_joint" type="fixed">
     <parent link="base_link"/>
-    <child link="lidar_link"/>
-    <origin xyz="0.0 0.0 0.10" rpy="0 0 0"/>
+    <child link="lidar_mount_link"/>
+    <origin
+      xyz="${lidar_out * cos(face_yaw) - lidar_side * sin(face_yaw)} ${lidar_out * sin(face_yaw) + lidar_side * cos(face_yaw)} ${mount['scan_height'] - base_center_z}"
+      rpy="${pi if mount['upside_down'] else 0.0} 0 ${face_yaw}"/>
   </joint>
 
-  <!--
-    Invisible scan origin.
-
-    The visible LiDAR remains on the robot.
-    The scan origin is placed forward and lower so that the low field walls
-    can be detected without the laser intersecting the robot body.
-  -->
-
-  <link name="lidar_scan_link"/>
+  <link name="lidar_scan_link">
+    <visual>
+      <!-- Sensor body centered on the scan plane -->
+      <geometry>
+        <box size="${lidar['body_size'][0]} ${lidar['body_size'][1]} ${lidar['body_size'][2]}"/>
+      </geometry>
+      <material name="dark_gray">
+        <color rgba="0.2 0.2 0.2 1.0"/>
+      </material>
+    </visual>
+  </link>
 
   <joint name="lidar_scan_joint" type="fixed">
-    <parent link="base_link"/>
+    <parent link="lidar_mount_link"/>
     <child link="lidar_scan_link"/>
-    <origin xyz="0.38 0.0 -0.10" rpy="0 0 0"/>
+    <origin
+      xyz="$(arg lidar_err_x) $(arg lidar_err_y) $(arg lidar_err_z)"
+      rpy="${radians($(arg lidar_err_roll_deg))} ${radians($(arg lidar_err_pitch_deg))} ${radians($(arg lidar_err_yaw_deg))}"/>
   </joint>
 
   <gazebo reference="lidar_scan_link">
+
+    <material>Gazebo/DarkGrey</material>
 
     <sensor name="lidar_sensor" type="ray">
 
       <always_on>true</always_on>
       <visualize>true</visualize>
-      <update_rate>10.0</update_rate>
+      <update_rate>${lidar['update_rate']}</update_rate>
 
       <ray>
 
         <scan>
           <horizontal>
-            <samples>720</samples>
+            <samples>${lidar['samples']}</samples>
             <resolution>1.0</resolution>
-            <min_angle>-3.14159265359</min_angle>
-            <max_angle>3.14159265359</max_angle>
+            <min_angle>${-radians(lidar['fov_deg']) / 2}</min_angle>
+            <max_angle>${radians(lidar['fov_deg']) / 2}</max_angle>
           </horizontal>
         </scan>
 
         <range>
-          <min>0.08</min>
-          <max>12.0</max>
-          <resolution>0.01</resolution>
+          <min>${lidar['range_min']}</min>
+          <max>${lidar['range_max']}</max>
+          <resolution>0.001</resolution>
         </range>
 
         <noise>
           <type>gaussian</type>
           <mean>0.0</mean>
-          <stddev>0.005</stddev>
+          <stddev>${lidar['noise_stddev']}</stddev>
         </noise>
 
       </ray>
