@@ -122,9 +122,9 @@ class SakuraMission(Node):
         p("stop_yaw_rate", 0.05)
         p("stop_confirm_s", 0.2)
         p("state_timeout_s", 30.0)
-        p("max_speed", 1.0)
-        p("max_accel", 2.0)
-        p("max_lateral_accel", 2.0)
+        p("max_speed", 2.0)
+        p("max_accel", 3.0)
+        p("max_lateral_accel", 3.5)
         p("max_yaw_rate", 3.0)
         p("max_yaw_accel", 6.0)
         p("wheel_speed_margin", 0.9)
@@ -290,9 +290,13 @@ class SakuraMission(Node):
     def start_mission(self):
         self.saturation_steps = 0
         ratio = float(self.param("command_accel_ratio"))
+        # The plan turns on arcs with up to max_lateral_accel, which may be
+        # larger than max_accel; the command must be able to follow that.
+        accel = max(float(self.param("max_accel")),
+                    float(self.param("max_lateral_accel")))
         self.shaper = CommandShaper(
             float(self.param("max_speed")) * 1.05,
-            float(self.param("max_accel")) * ratio,
+            accel * ratio,
             float(self.param("max_yaw_rate")) * 1.05,
             float(self.param("max_yaw_accel")) * ratio)
         if self.checker is None:

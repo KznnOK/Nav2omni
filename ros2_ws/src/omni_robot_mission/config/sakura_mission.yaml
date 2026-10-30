@@ -102,9 +102,12 @@ sakura_mission:
     state_timeout_s: 30.0
 
     # --- motion limits (to be tuned by the speed/acceleration sweep) -----
-    max_speed: 1.0                  # m/s (仮値)
-    max_accel: 2.0                  # m/s^2 (仮値)
-    max_lateral_accel: 2.0          # m/s^2 on arcs, v <= sqrt(a_lat * r) (仮値)
+    # Chosen from the 24-condition sweep (results/phase4_speed_sweep). Still
+    # 仮値 until the real robot shows it can reach these accelerations; the
+    # conservative fallback is 2.0 / 2.0 / 2.5.
+    max_speed: 2.0                  # m/s (仮値)
+    max_accel: 3.0                  # m/s^2 (仮値)
+    max_lateral_accel: 3.5          # m/s^2 on arcs, v <= sqrt(a_lat * r) (仮値)
     max_yaw_rate: 3.0               # rad/s (仮値)
     max_yaw_accel: 6.0              # rad/s^2 (仮値)
     # Direction-dependent top speed of the X wheels at the fixed heading is
@@ -127,7 +130,8 @@ sakura_mission:
     stop_decel_ratio: 0.8
     final_gain: 3.0                 # 1/s
     stop_yaw_rate: 0.05             # rad/s, considered stopped
-    command_accel_ratio: 1.3        # command accel limit = ratio * max_accel
+    # command accel limit = ratio * max(max_accel, max_lateral_accel)
+    command_accel_ratio: 1.3
     # AMCL corrections are blended into the control pose at these rates.
     correction_rate_xy: 0.3         # m/s (仮値)
     correction_rate_yaw_deg: 10.0   # deg/s (仮値)
