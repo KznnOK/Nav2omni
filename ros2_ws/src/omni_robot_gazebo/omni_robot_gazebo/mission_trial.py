@@ -83,6 +83,8 @@ class Trial(Node):
         self.state = None
         self.target = None
         self.events = []
+        self.samples = []
+        self.targets = []
         self.on_truth_sample = None
         self.create_subscription(
             Odometry, "/ground_truth/odom", self.on_truth, 50)
@@ -107,6 +109,7 @@ class Trial(Node):
     def on_target(self, msg):
         p = msg.pose
         self.target = (p.position.x, p.position.y, yaw_of(p.orientation))
+        self.targets.append((self.now(), self.target))
 
     def estimate(self):
         try:
@@ -175,12 +178,70 @@ def pose_error(truth, target):
     return (truth[0] - target[0], truth[1] - target[1], wrap(truth[2] - target[2]))
 
 
+SETTLE_STATES = {"GO_SAKURA": "go", "ROTATE_1": "rotate1",
+                 "REAPPROACH_1": "reapproach1", "ROTATE_2": "rotate2",
+                 "RETURN": "return_stop"}
+
+
+def settle_rows(row, node, args):
+    """Overshoot and settling time of each stop/turn from the ground truth.
+
+    Translation: overshoot = how far the robot went past the target along the
+    approach direction (taken 0.2 m before the target). Rotation: degrees
+    past the target yaw. Settling time = from the first sample inside the
+    tolerance to the end of the state (arrival accepted by the mission).
+    """
+    intervals = []
+    for k, (stamp, text, _, _) in enumerate(node.events):
+        end = node.events[k + 1][0] if k + 1 < len(node.events) else node.now()
+        intervals.append((text.split()[0], stamp, end))
+    for state, key in SETTLE_STATES.items():
+        span = [(t0, t1) for name, t0, t1 in intervals if name == state]
+        for suffix in ("overshoot", "settle_s"):
+            row[f"{key}_{suffix}"] = ""
+        if not span:
+            continue
+        t0, t1 = span[0]
+        targets = [tg for t, tg in node.targets if t0 - 0.1 <= t < t1]
+        samples = [s for s in node.samples if t0 <= s[0] <= t1]
+        if not targets or not samples:
+            continue
+        tx, ty, tyaw = targets[-1]
+        rotation = state.startswith("ROTATE")
+        if rotation:
+            sign = 1.0 if wrap(tyaw - samples[0][3]) >= 0 else -1.0
+            errors = [sign * math.degrees(wrap(s[3] - tyaw)) for s in samples]
+            overshoot = max(0.0, max(errors))
+            inside = [s[0] for s, e in zip(samples, errors)
+                      if abs(e) <= args.yaw_tolerance_deg]
+            row[f"{key}_overshoot"] = f"{overshoot:.2f}deg"
+        else:
+            far = [s for s in samples if math.hypot(s[1] - tx, s[2] - ty) >= 0.2]
+            ref = far[-1] if far else samples[0]
+            ux, uy = tx - ref[1], ty - ref[2]
+            norm = math.hypot(ux, uy)
+            after = [s for s in samples if s[0] >= ref[0]]
+            if norm > 1e-3:
+                ux, uy = ux / norm, uy / norm
+                overshoot = max(0.0, max((s[1] - tx) * ux + (s[2] - ty) * uy
+                                         for s in after))
+            else:
+                overshoot = 0.0
+            tol = args.return_tolerance if state == "RETURN" else args.tolerance
+            inside = [s[0] for s in after
+                      if abs(s[1] - tx) <= tol and abs(s[2] - ty) <= tol]
+            row[f"{key}_overshoot"] = f"{overshoot * 1000:.1f}mm"
+        row[f"{key}_settle_s"] = round(t1 - inside[0], 3) if inside else ""
+
+
 def run_trial(node, study, start, args, overrides):
     node.call(node.set_autonomy, SetBool.Request(data=False))
     node.spin_for(0.5)
     node.place(*start)
     node.set_mission_params(overrides)
     node.events = []
+    node.samples = []
+    node.targets = []
     tracking = {"max_est_error": 0.0, "contact": False, "max_speed": 0.0,
                 "contact_at": "", "max_est_at": ""}
 
@@ -188,6 +249,7 @@ def run_trial(node, study, start, args, overrides):
         if node.truth is None:
             return
         x, y, yaw, speed = node.truth
+        node.samples.append((node.now(), x, y, yaw))
         tracking["max_speed"] = max(tracking["max_speed"], speed)
         state = (node.state or "?").split()[0]
         if study.collides(x, y, yaw) and not tracking["contact"]:
@@ -263,6 +325,7 @@ def run_trial(node, study, start, args, overrides):
             reasons.append(f"{key} position error")
         if abs(math.degrees(err[2])) > args.yaw_tolerance_deg:
             reasons.append(f"{key} yaw error")
+    settle_rows(row, node, args)
     row["max_est_error_mm"] = round(tracking["max_est_error"] * 1000, 1)
     row["max_speed"] = round(tracking["max_speed"], 3)
     row["max_est_error_at"] = tracking["max_est_at"]

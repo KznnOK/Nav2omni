@@ -53,7 +53,10 @@ sakura_mission:
     # If it would, back off along this map-frame direction, rotate, re-approach.
     rotation_backoff_direction: [1.0, 0.0]
     rotation_backoff_max: 0.5
-    clearance_margin: 0.02          # 仮値: extra margin for every collision check
+    clearance_margin: 0.02          # 仮値: margin for graph edges, rotation and back-off checks
+    # Shortcuts and arcs keep this much more room to the walls, for tracking
+    # and localization errors at speed.
+    path_clearance_margin: 0.06     # 仮値
 
     # --- tolerances -------------------------------------------------------
     position_tolerance: 0.05        # +-50 mm per axis at the sakura zone
@@ -67,13 +70,31 @@ sakura_mission:
     # --- motion limits (to be tuned by the speed/acceleration sweep) -----
     max_speed: 1.0                  # m/s (仮値)
     max_accel: 2.0                  # m/s^2 (仮値)
+    max_lateral_accel: 2.0          # m/s^2 on arcs, v <= sqrt(a_lat * r) (仮値)
     max_yaw_rate: 3.0               # rad/s (仮値)
     max_yaw_accel: 6.0              # rad/s^2 (仮値)
-    # Corner speed is chosen so that the path overshoot at a corner stays
-    # below this distance: v_c = sqrt(2 * d * a / (2 sin(turn / 2))).
-    corner_deviation: 0.02          # m (仮値)
-    # Tracking controller
-    position_gain: 4.0              # 1/s
-    yaw_gain: 5.0                   # 1/s
+    # Direction-dependent top speed of the X wheels at the fixed heading is
+    # max_wheel_speed * r / max|cos(dir - wheel_dir)| times this margin.
+    wheel_speed_margin: 0.9
+
+    # --- path shaping --------------------------------------------------------
+    shortcut: true                  # drop waypoints when the straight line is clear
+    fillet_max_radius: 0.8          # m, corners become the largest clear arc <= this
+
+    # --- tracking ------------------------------------------------------------
+    # Feed-forward: planned speed at the projection of the robot on the path
+    # (lookahead_time ahead). Feedback only corrects small errors.
+    lookahead_time: 0.05            # s
+    lateral_gain: 3.0               # 1/s, cross-track correction
+    feedback_max_speed: 0.15        # m/s cap of position corrections
+    yaw_gain: 5.0                   # 1/s heading hold / final turn
+    feedback_max_yaw_rate: 0.5      # rad/s cap of heading corrections
+    # Stops and turns: v = min(sqrt(2 * ratio * a * d), final_gain * d)
+    stop_decel_ratio: 0.8
+    final_gain: 3.0                 # 1/s
+    stop_yaw_rate: 0.05             # rad/s, considered stopped
     command_accel_ratio: 1.3        # command accel limit = ratio * max_accel
+    # AMCL corrections are blended into the control pose at these rates.
+    correction_rate_xy: 0.3         # m/s (仮値)
+    correction_rate_yaw_deg: 10.0   # deg/s (仮値)
     control_rate: 50.0              # Hz

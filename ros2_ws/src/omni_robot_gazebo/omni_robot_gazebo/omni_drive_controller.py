@@ -117,17 +117,18 @@ class OmniDriveController(Node):
                 linear_velocity + rotational_velocity
             ) / self.wheel_radius
 
-            wheel_angular_velocity = max(
-                -self.max_wheel_speed,
-                min(
-                    self.max_wheel_speed,
-                    wheel_angular_velocity,
-                ),
-            )
-
             wheel_angular_velocities.append(
                 wheel_angular_velocity
             )
+
+        # If any wheel exceeds the limit, scale all four by the same ratio so
+        # the direction of motion is kept (clipping each wheel separately
+        # would turn the robot and change the travel direction).
+        peak = max(abs(w) for w in wheel_angular_velocities)
+        if peak > self.max_wheel_speed:
+            ratio = self.max_wheel_speed / peak
+            wheel_angular_velocities = [
+                w * ratio for w in wheel_angular_velocities]
 
         command_message = Float64MultiArray()
         command_message.data = wheel_angular_velocities

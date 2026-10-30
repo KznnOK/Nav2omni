@@ -12,9 +12,14 @@ Runs while /autonomy_enabled is true (set by mode_manager):
                  turn back to the travel heading (where it is clear) and go
                  along the graph to the return pose
   DONE / FAILED / ABORTED
-The heading stays fixed while travelling. Commands go to /cmd_vel_auto; the
-pose comes from TF map -> base_footprint (AMCL + EKF). When autonomy is
-switched off the motion is dropped at once and a zero command is sent.
+Paths are shortcut and filleted (trajectory.SmoothPath) and followed with the
+planned speed as feed-forward plus a small capped lateral correction. Stops
+and turns use a deceleration law that reaches zero exactly at the target.
+The heading stays fixed while travelling. Commands go to /cmd_vel_auto.
+
+Pose: TF map->odom (AMCL) composed with odom->base_footprint (EKF). AMCL
+corrections arrive as steps, so they are blended into the control pose at a
+limited rate (correction_rate_xy / correction_rate_yaw_deg).
 """
 import math
 
@@ -24,7 +29,7 @@ from nav_msgs.msg import OccupancyGrid, Odometry, Path
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
-from std_msgs.msg import Bool, String
+from std_msgs.msg import Bool, Float64MultiArray, String
 from tf2_ros import Buffer, TransformException, TransformListener
 
 from omni_robot_description.geometry import (
@@ -33,8 +38,13 @@ from omni_robot_description.geometry import (
 from omni_robot_mission.collision import OccupancyChecker
 from omni_robot_mission.route_graph import RouteGraph
 from omni_robot_mission.trajectory import (
-    CommandShaper, PathMotion, YawMotion, wrap)
+    CommandShaper, SmoothPath, stopping_speed, wrap)
 
+
+DEBUG_FIELDS = ["ref_x", "ref_y", "ref_v", "ref_yaw", "est_x", "est_y",
+                "est_yaw", "raw_vx", "raw_vy", "raw_wz", "cmd_vx", "cmd_vy",
+                "cmd_wz", "body_vx", "body_vy", "wheel_scale", "amcl_x",
+                "amcl_y", "amcl_yaw"]
 
 LATCHED = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                      durability=DurabilityPolicy.TRANSIENT_LOCAL)
@@ -44,19 +54,33 @@ def yaw_of(q):
     return math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z))
 
 
+def compose(a, b):
+    """Pose a (x, y, yaw) followed by the relative pose b."""
+    c, s = math.cos(a[2]), math.sin(a[2])
+    return (a[0] + c * b[0] - s * b[1], a[1] + s * b[0] + c * b[1],
+            wrap(a[2] + b[2]))
+
+
+def relative(a, b):
+    """Pose of b seen from a."""
+    c, s = math.cos(a[2]), math.sin(a[2])
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    return (c * dx + s * dy, -s * dx + c * dy, wrap(b[2] - a[2]))
+
+
 class Move:
     """One motion step: a path at a fixed heading or an in-place rotation."""
 
-    def __init__(self, kind, path=None, yaw=None, rotation=None, hold=None,
+    def __init__(self, kind, points=None, yaw=None, hold=None,
                  tolerance=0.03, yaw_tolerance=math.radians(3.0), label=None):
         self.kind = kind
         self.label = label
-        self.path = path
+        self.points = points
         self.yaw = yaw
-        self.rotation = rotation
         self.hold = hold
         self.tolerance = tolerance
         self.yaw_tolerance = yaw_tolerance
+        self.path = None
         self.settled_since = None
 
 
@@ -81,21 +105,33 @@ class SakuraMission(Node):
         p("rotation_backoff_direction", [1.0, 0.0])
         p("rotation_backoff_max", 0.5)
         p("clearance_margin", 0.02)
+        p("path_clearance_margin", 0.06)
         p("position_tolerance", 0.05)
         p("yaw_tolerance_deg", 2.0)
         p("return_position_tolerance", 0.05)
         p("return_yaw_tolerance_deg", 2.0)
         p("stop_speed", 0.02)
+        p("stop_yaw_rate", 0.05)
         p("stop_confirm_s", 0.2)
         p("state_timeout_s", 30.0)
         p("max_speed", 1.0)
         p("max_accel", 2.0)
+        p("max_lateral_accel", 2.0)
         p("max_yaw_rate", 3.0)
         p("max_yaw_accel", 6.0)
-        p("corner_deviation", 0.02)
-        p("position_gain", 4.0)
+        p("wheel_speed_margin", 0.9)
+        p("fillet_max_radius", 0.8)
+        p("shortcut", True)
+        p("lookahead_time", 0.05)
+        p("stop_decel_ratio", 0.8)
+        p("final_gain", 3.0)
+        p("lateral_gain", 3.0)
+        p("feedback_max_speed", 0.15)
         p("yaw_gain", 5.0)
+        p("feedback_max_yaw_rate", 0.5)
         p("command_accel_ratio", 1.3)
+        p("correction_rate_xy", 0.3)
+        p("correction_rate_yaw_deg", 10.0)
         p("control_rate", 50.0)
 
         self.geometry = load_geometry(self.get_parameter("geometry_file").value)
@@ -114,10 +150,13 @@ class SakuraMission(Node):
         self.state_since = None
         self.moves = []
         self.move = None
-        self.wait_until = None
         self.speed = 0.0
+        self.yaw_rate = 0.0
         self.saturation_steps = 0
         self.shaper = None
+        self.filtered = None
+        self.last_odom_pose = None
+        self.debug = {}
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -126,12 +165,14 @@ class SakuraMission(Node):
         self.path_pub = self.create_publisher(Path, "/mission/path", LATCHED)
         self.target_pub = self.create_publisher(
             PoseStamped, "/mission/target", LATCHED)
+        # Diagnostics, one message per control step (see DEBUG_FIELDS)
+        self.debug_pub = self.create_publisher(
+            Float64MultiArray, "/mission/debug", 10)
         self.create_subscription(OccupancyGrid, "/map", self.on_map, LATCHED)
         self.create_subscription(
             Bool, "/autonomy_enabled", self.on_enabled, LATCHED)
         self.create_subscription(Odometry, "/odom", self.on_odom, 20)
-        rate = float(self.get_parameter("control_rate").value)
-        self.dt = 1.0 / rate
+        self.dt = 1.0 / float(self.get_parameter("control_rate").value)
         self.timer = self.create_timer(self.dt, self.tick)
         self.publish_state("IDLE")
 
@@ -157,6 +198,7 @@ class SakuraMission(Node):
     def on_odom(self, msg):
         t = msg.twist.twist
         self.speed = math.hypot(t.linear.x, t.linear.y)
+        self.yaw_rate = t.angular.z
 
     def on_enabled(self, msg):
         if msg.data and not self.enabled:
@@ -169,14 +211,38 @@ class SakuraMission(Node):
             self.moves, self.move = [], None
             self.cmd_pub.publish(Twist())
 
-    def pose(self):
+    def lookup(self, parent, child):
         try:
-            tf = self.tf_buffer.lookup_transform(
-                "map", "base_footprint", Time())
+            t = self.tf_buffer.lookup_transform(parent, child, Time()).transform
         except TransformException:
             return None
-        t = tf.transform
         return t.translation.x, t.translation.y, yaw_of(t.rotation)
+
+    def update_pose(self, reset=False):
+        """Control pose: odometry motion + AMCL correction at a limited rate."""
+        map_odom = self.lookup("map", "odom")
+        odom_base = self.lookup("odom", "base_footprint")
+        if map_odom is None or odom_base is None:
+            return self.filtered
+        raw = compose(map_odom, odom_base)
+        self.debug.update(amcl_x=raw[0], amcl_y=raw[1], amcl_yaw=raw[2])
+        if reset or self.filtered is None or self.last_odom_pose is None:
+            self.filtered = raw
+        else:
+            predicted = compose(self.filtered,
+                                relative(self.last_odom_pose, odom_base))
+            dx, dy = raw[0] - predicted[0], raw[1] - predicted[1]
+            dyaw = wrap(raw[2] - predicted[2])
+            step = float(self.param("correction_rate_xy")) * self.dt
+            norm = math.hypot(dx, dy)
+            if norm > step:
+                dx, dy = dx * step / norm, dy * step / norm
+            yaw_step = math.radians(self.param("correction_rate_yaw_deg")) * self.dt
+            dyaw = max(-yaw_step, min(yaw_step, dyaw))
+            self.filtered = (predicted[0] + dx, predicted[1] + dy,
+                             wrap(predicted[2] + dyaw))
+        self.last_odom_pose = odom_base
+        return self.filtered
 
     # ------------------------------------------------------------ states
     def publish_state(self, state, detail=""):
@@ -192,26 +258,25 @@ class SakuraMission(Node):
 
     def start_mission(self):
         self.saturation_steps = 0
+        ratio = float(self.param("command_accel_ratio"))
         self.shaper = CommandShaper(
-            float(self.param("max_speed")) * 1.2,
-            float(self.param("max_accel")) * float(self.param("command_accel_ratio")),
-            float(self.param("max_yaw_rate")) * 1.2,
-            float(self.param("max_yaw_accel")) * float(self.param("command_accel_ratio")))
+            float(self.param("max_speed")) * 1.05,
+            float(self.param("max_accel")) * ratio,
+            float(self.param("max_yaw_rate")) * 1.05,
+            float(self.param("max_yaw_accel")) * ratio)
         if self.checker is None:
             self.fail("no map")
             return
-        pose = self.pose()
+        pose = self.update_pose(reset=True)
         if pose is None:
             self.fail("no pose (TF map -> base_footprint)")
             return
-        goal = self.graph.nodes[self.param("sakura_node")]
         yaw = math.radians(self.param("sakura_yaw_deg"))
         points = self.graph_route(pose, self.param("sakura_node"))
         if points is None:
             self.fail("no reachable waypoint from the start pose")
             return
-        self.publish_target(goal[0], goal[1], yaw)
-        self.moves = [self.path_move(points, yaw, precise=True)]
+        self.moves = [self.path_move(points, yaw, precise=True, label="GO_SAKURA")]
         self.next_state("GO_SAKURA")
 
     def graph_route(self, pose, goal_node):
@@ -229,27 +294,21 @@ class SakuraMission(Node):
         if names is None:
             return None
         self.get_logger().info(f"route: start -> {' -> '.join(names)}")
-        points = [(x, y)] + [self.graph.nodes[n] for n in names]
-        if math.hypot(points[1][0] - x, points[1][1] - y) < 1e-3:
-            points.pop(0)
-        self.publish_path(points)
-        return points
+        return [(x, y)] + [self.graph.nodes[n] for n in names]
 
-    def path_move(self, points, yaw, precise):
-        tolerance = float(self.param("position_tolerance")) if precise else 0.03
-        yaw_tol = math.radians(self.param("yaw_tolerance_deg")) if precise \
-            else math.radians(3.0)
-        return Move("path", path=PathMotion(
-            points, float(self.param("max_speed")), float(self.param("max_accel")),
-            float(self.param("corner_deviation"))), yaw=yaw,
-            tolerance=tolerance, yaw_tolerance=yaw_tol)
+    def path_move(self, points, yaw, precise, label=None):
+        if precise:
+            tolerance = float(self.param("position_tolerance"))
+            yaw_tol = math.radians(self.param("yaw_tolerance_deg"))
+        else:
+            tolerance, yaw_tol = 0.03, math.radians(3.0)
+        return Move("path", points=points, yaw=yaw, tolerance=tolerance,
+                    yaw_tolerance=yaw_tol, label=label)
 
-    def rotate_move(self, x, y, yaw_from, yaw_to):
-        return Move("rotate", rotation=YawMotion(
-            yaw_from, yaw_to, float(self.param("max_yaw_rate")),
-            float(self.param("max_yaw_accel"))), hold=(x, y),
-            tolerance=0.03,
-            yaw_tolerance=math.radians(self.param("yaw_tolerance_deg")))
+    def rotate_move(self, x, y, yaw_to, label=None):
+        return Move("rotate", yaw=yaw_to, hold=(x, y), tolerance=0.03,
+                    yaw_tolerance=math.radians(self.param("yaw_tolerance_deg")),
+                    label=label)
 
     def rotation_plan(self, x, y, yaw_from, yaw_to):
         """Moves turning from yaw_from to yaw_to near (x, y) without contact.
@@ -257,7 +316,7 @@ class SakuraMission(Node):
         Returns (moves_before_turn, turn, turn_point) or None.
         """
         if self.checker.rotation_clear(x, y, yaw_from, yaw_to):
-            return [], self.rotate_move(x, y, yaw_from, yaw_to), (x, y)
+            return [], self.rotate_move(x, y, yaw_to), (x, y)
         dx, dy = self.param("rotation_backoff_direction")
         norm = math.hypot(dx, dy)
         dx, dy = dx / norm, dy / norm
@@ -269,7 +328,7 @@ class SakuraMission(Node):
                 self.get_logger().info(
                     f"rotation needs a {0.01 * k:.2f} m back-off")
                 return ([self.path_move([(x, y), (bx, by)], yaw_from, False)],
-                        self.rotate_move(bx, by, yaw_from, yaw_to), (bx, by))
+                        self.rotate_move(bx, by, yaw_to), (bx, by))
         return None
 
     def next_state(self, state):
@@ -279,6 +338,7 @@ class SakuraMission(Node):
     def tick(self):
         if not self.enabled or self.state in ("IDLE", "DONE", "FAILED", "ABORTED"):
             return
+        pose = self.update_pose()
         elapsed = (self.get_clock().now() - self.state_since).nanoseconds * 1e-9
         if elapsed > float(self.param("state_timeout_s")):
             self.fail(f"timeout in {self.state}")
@@ -288,27 +348,143 @@ class SakuraMission(Node):
             if elapsed >= float(self.param("sakura_wait_s")):
                 self.after_wait()
             return
-        pose = self.pose()
         if pose is None:
             self.cmd_pub.publish(Twist())
             return
         if self.move is None:
             if not self.moves:
-                self.after_moves(pose)
+                self.after_moves()
                 return
             self.move = self.moves.pop(0)
+            if not self.activate(self.move, pose):
+                return
             if self.move.label and self.move.label != self.state:
                 self.next_state(self.move.label)
         if self.control(self.move, pose):
             self.move = None
             if not self.moves:
-                self.after_moves(pose)
+                self.after_moves()
+
+    def direction_speed_limit(self, direction):
+        """Max speed in a body-frame direction with every wheel <= its limit."""
+        peak = max(abs(math.cos(direction - wyaw)) for wyaw in self.wheel_yaw)
+        return (float(self.param("wheel_speed_margin")) * self.max_wheel_speed
+                * self.wheel_radius / max(peak, 1e-6))
+
+    def activate(self, move, pose):
+        """Build the smoothed path from the actual pose when a move starts."""
+        if move.kind == "path":
+            points = [(pose[0], pose[1])] + list(move.points[1:])
+            try:
+                move.path = SmoothPath(
+                    points, move.yaw,
+                    lambda x, y: not self.checker.pose_collides(
+                        x, y, move.yaw,
+                        margin=float(self.param("path_clearance_margin"))),
+                    float(self.param("max_speed")), float(self.param("max_accel")),
+                    float(self.param("max_lateral_accel")),
+                    self.direction_speed_limit, start_speed=self.speed,
+                    max_radius=float(self.param("fillet_max_radius")),
+                    shortcut=bool(self.param("shortcut")))
+            except (ValueError, ZeroDivisionError) as error:
+                self.fail(f"path smoothing failed: {error}")
+                return False
+            path = move.path
+            self.publish_path([(s[0], s[1]) for s in path.samples[::5]]
+                              + [path.goal])
+            self.get_logger().info(
+                f"path {move.label or ''}: {len(path.corners)} corners after "
+                f"shortcut, fillet radii {path.radii}, length {path.length:.2f} m, "
+                f"planned {path.planned_time():.2f} s")
+            self.publish_target(path.goal[0], path.goal[1], move.yaw)
+        else:
+            self.publish_target(move.hold[0], move.hold[1], move.yaw)
+        return True
+
+    def control(self, move, pose):
+        """One control step. Returns True when the move is complete."""
+        x, y, yaw = pose
+        decel_ratio = float(self.param("stop_decel_ratio"))
+        fb_max = float(self.param("feedback_max_speed"))
+        if move.kind == "path":
+            path = move.path
+            i = path.project(x, y)
+            px, py, tx, ty, _, s = path.samples[i]
+            remaining = path.length - s
+            gx, gy = path.goal
+            if remaining > 0.02:
+                ahead = max(0.01, self.speed * float(self.param("lookahead_time")))
+                j = path.sample_at(s + ahead)
+                v_ff = path.speed[j]
+                fx, fy = path.samples[j][2], path.samples[j][3]
+                # lateral (cross-track) correction only, capped
+                ex, ey = px - x, py - y
+                along = ex * tx + ey * ty
+                lx, ly = ex - along * tx, ey - along * ty
+                gain = float(self.param("lateral_gain"))
+                cx, cy = gain * lx, gain * ly
+                norm = math.hypot(cx, cy)
+                if norm > fb_max:
+                    cx, cy = cx * fb_max / norm, cy * fb_max / norm
+                vx, vy = v_ff * fx + cx, v_ff * fy + cy
+                self.debug.update(ref_x=px, ref_y=py, ref_v=v_ff)
+            else:
+                # final approach: speed that is zero exactly at the goal
+                d = math.hypot(gx - x, gy - y)
+                speed = stopping_speed(
+                    d, decel_ratio * float(self.param("max_accel")),
+                    float(self.param("final_gain")))
+                vx, vy = ((gx - x) / d * speed, (gy - y) / d * speed) if d > 1e-6 \
+                    else (0.0, 0.0)
+                self.debug.update(ref_x=gx, ref_y=gy, ref_v=0.0)
+            yaw_err = wrap(move.yaw - yaw)
+            wz = max(-float(self.param("feedback_max_yaw_rate")),
+                     min(float(self.param("feedback_max_yaw_rate")),
+                         float(self.param("yaw_gain")) * yaw_err))
+            target = (gx, gy, move.yaw)
+            near_end = remaining <= 0.02
+        else:
+            hx, hy = move.hold
+            yaw_err = wrap(move.yaw - yaw)
+            rate = stopping_speed(
+                abs(yaw_err), decel_ratio * float(self.param("max_yaw_accel")),
+                float(self.param("yaw_gain")))
+            wz = math.copysign(min(rate, float(self.param("max_yaw_rate"))), yaw_err)
+            # hold the position with a small capped correction
+            gain = float(self.param("final_gain"))
+            vx, vy = gain * (hx - x), gain * (hy - y)
+            norm = math.hypot(vx, vy)
+            if norm > fb_max:
+                vx, vy = vx * fb_max / norm, vy * fb_max / norm
+            target = (hx, hy, move.yaw)
+            near_end = True
+            self.debug.update(ref_x=hx, ref_y=hy, ref_v=0.0)
+        self.debug.update(ref_yaw=move.yaw, est_x=x, est_y=y, est_yaw=yaw,
+                          raw_vx=vx, raw_vy=vy, raw_wz=wz)
+
+        vx, vy, wz = self.shaper.shape(vx, vy, wz, self.dt)
+        self.publish_command(vx, vy, wz, yaw)
+
+        ok = (near_end
+              and abs(target[0] - x) <= move.tolerance
+              and abs(target[1] - y) <= move.tolerance
+              and abs(wrap(target[2] - yaw)) <= move.yaw_tolerance
+              and self.speed <= float(self.param("stop_speed"))
+              and abs(self.yaw_rate) <= float(self.param("stop_yaw_rate")))
+        now = self.get_clock().now()
+        if not ok:
+            move.settled_since = None
+            return False
+        if move.settled_since is None:
+            move.settled_since = now
+        if (now - move.settled_since).nanoseconds * 1e-9 >= float(
+                self.param("stop_confirm_s")):
+            self.shaper.reset()
+            self.cmd_pub.publish(Twist())
+            return True
+        return False
 
     def after_wait(self):
-        pose = self.pose()
-        if pose is None:
-            return
-        x, y, _ = pose
         goal = self.graph.nodes[self.param("sakura_node")]
         if self.state == "WAIT_SAKURA_1":
             yaw0 = math.radians(self.param("sakura_yaw_deg"))
@@ -318,15 +494,13 @@ class SakuraMission(Node):
                 self.fail("no clear place to rotate at the sakura zone")
                 return
             before, turn, point = plan
-            self.publish_target(goal[0], goal[1], yaw1)
             for move in before:
                 move.label = "BACKOFF_1"
             turn.label = "ROTATE_1"
             self.moves = before + [turn]
             if before:
-                back = self.path_move([point, goal], yaw1, True)
-                back.label = "REAPPROACH_1"
-                self.moves.append(back)
+                self.moves.append(self.path_move(
+                    [point, goal], yaw1, True, label="REAPPROACH_1"))
             self.next_state(self.moves[0].label)
         elif self.state == "WAIT_SAKURA_2":
             yaw1 = math.radians(self.param("sakura_rotated_yaw_deg"))
@@ -343,10 +517,9 @@ class SakuraMission(Node):
                 self.moves = before + [turn]
                 self.next_state(self.moves[0].label)
             else:
-                self.moves = []
                 self.start_return()
 
-    def after_moves(self, pose):
+    def after_moves(self):
         if self.state == "GO_SAKURA":
             self.next_state("WAIT_SAKURA_1")
         elif self.state in ("BACKOFF_1", "ROTATE_1", "REAPPROACH_1"):
@@ -359,7 +532,7 @@ class SakuraMission(Node):
                 "DONE", f"wheel_speed_limited_steps={self.saturation_steps}")
 
     def start_return(self):
-        pose = self.pose()
+        pose = self.filtered
         travel = math.radians(self.param("travel_yaw_deg"))
         points = self.graph_route(pose, self.param("return_node"))
         if points is None:
@@ -369,8 +542,7 @@ class SakuraMission(Node):
         if math.hypot(goal[0] - points[-1][0], goal[1] - points[-1][1]) > 1e-3:
             points.append(goal)
         final_yaw = math.radians(self.param("return_yaw_deg"))
-        self.publish_target(goal[0], goal[1], final_yaw)
-        move = self.path_move(points, travel, True)
+        move = self.path_move(points, travel, True, label="RETURN")
         move.tolerance = float(self.param("return_position_tolerance"))
         move.yaw_tolerance = math.radians(self.param("return_yaw_tolerance_deg"))
         self.moves = [move]
@@ -378,63 +550,9 @@ class SakuraMission(Node):
             if not self.checker.rotation_clear(goal[0], goal[1], travel, final_yaw):
                 self.fail("return yaw cannot be reached without contact")
                 return
-            self.moves.append(self.rotate_move(goal[0], goal[1], travel, final_yaw))
-        self.publish_path(points)
+            self.moves.append(self.rotate_move(goal[0], goal[1], final_yaw,
+                                               label="RETURN"))
         self.next_state("RETURN")
-
-    def control(self, move, pose):
-        """One control step. Returns True when the move is complete."""
-        x, y, yaw = pose
-        kp = float(self.param("position_gain"))
-        ky = float(self.param("yaw_gain"))
-        if move.kind == "path":
-            motion = move.path
-            motion.step(self.dt)
-            (rx, ry), (tx, ty), v = motion.reference()
-            vx = v * tx + kp * (rx - x)
-            vy = v * ty + kp * (ry - y)
-            if motion.finished:
-                # never faster than what still stops within the remaining error
-                d = math.hypot(rx - x, ry - y)
-                limit = math.sqrt(2.0 * float(self.param("max_accel")) * d)
-                speed = math.hypot(vx, vy)
-                if speed > limit > 0.0:
-                    vx, vy = vx * limit / speed, vy * limit / speed
-            wz = ky * wrap(move.yaw - yaw)
-            target = (motion.goal[0], motion.goal[1], move.yaw)
-            done_ref = motion.finished
-        else:
-            motion = move.rotation
-            motion.step(self.dt)
-            ref_yaw, rate = motion.reference()
-            hx, hy = move.hold
-            vx, vy = kp * (hx - x), kp * (hy - y)
-            wz = rate + ky * wrap(ref_yaw - yaw)
-            target = (hx, hy, motion.goal_yaw)
-            done_ref = motion.finished
-
-        vx, vy, wz = self.shaper.shape(vx, vy, wz, self.dt)
-        self.publish_command(vx, vy, wz, yaw)
-
-        if not done_ref:
-            move.settled_since = None
-            return False
-        ok = (abs(target[0] - x) <= move.tolerance
-              and abs(target[1] - y) <= move.tolerance
-              and abs(wrap(target[2] - yaw)) <= move.yaw_tolerance
-              and self.speed <= float(self.param("stop_speed")))
-        now = self.get_clock().now()
-        if not ok:
-            move.settled_since = None
-            return False
-        if move.settled_since is None:
-            move.settled_since = now
-        if (now - move.settled_since).nanoseconds * 1e-9 >= float(
-                self.param("stop_confirm_s")):
-            self.shaper.reset()
-            self.cmd_pub.publish(Twist())
-            return True
-        return False
 
     def publish_command(self, vx, vy, wz, yaw):
         c, s = math.cos(yaw), math.sin(yaw)
@@ -445,10 +563,16 @@ class SakuraMission(Node):
             cw, sw = math.cos(wyaw), math.sin(wyaw)
             wheel = (cw * bx + sw * by + wz * (-cw * wy + sw * wx)) / self.wheel_radius
             peak = max(peak, abs(wheel))
+        scale = 1.0
         if peak > self.max_wheel_speed:
             scale = self.max_wheel_speed / peak
             bx, by, wz = bx * scale, by * scale, wz * scale
             self.saturation_steps += 1
+        self.debug.update(cmd_vx=vx, cmd_vy=vy, cmd_wz=wz, body_vx=bx,
+                          body_vy=by, wheel_scale=scale)
+        self.debug_pub.publish(Float64MultiArray(data=[
+            self.get_clock().now().nanoseconds * 1e-9]
+            + [float(self.debug.get(k, float("nan"))) for k in DEBUG_FIELDS]))
         msg = Twist()
         msg.linear.x, msg.linear.y, msg.angular.z = bx, by, wz
         self.cmd_pub.publish(msg)
@@ -484,7 +608,8 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
-        node.cmd_pub.publish(Twist())
+        if rclpy.ok():
+            node.cmd_pub.publish(Twist())
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()

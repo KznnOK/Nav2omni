@@ -1,11 +1,19 @@
-"""Reference motions for the holonomic follower (no ROS dependency).
+"""Path smoothing, speed planning and the tracking laws (no ROS dependency).
 
-PathMotion moves a reference point along a polyline with a trapezoidal
-speed profile: it accelerates at max_accel, never exceeds max_speed, and
-slows down in time for each corner and for the end point. The corner speed
-is chosen so that the overshoot past a corner stays near corner_deviation:
-    v_c = sqrt(2 * d * a / (2 sin(turn / 2)))
-YawMotion does the same for an in-place rotation.
+SmoothPath
+  1. shortcut: drop waypoints while the straight line stays clear of walls,
+  2. fillet: replace each corner with the largest clear circular arc,
+  3. sample every `step` m with position, unit tangent and curvature,
+  4. speed plan over the whole path (forward/backward passes):
+       v <= max_speed
+       v <= direction limit of the X-configured wheels at the fixed heading
+       v <= sqrt(max_lateral_accel / curvature)                  (arcs)
+       tangential acceleration <= sqrt(a^2 - (v^2 * curvature)^2)
+       v = 0 at the end.
+The follower projects the robot onto the path and commands the planned speed
+there (feed-forward along the tangent) plus a small, capped lateral
+correction, so no lag can build up and the robot is never pushed above the
+plan to catch up.
 """
 import math
 
@@ -14,101 +22,233 @@ def wrap(angle):
     return math.atan2(math.sin(angle), math.cos(angle))
 
 
-class PathMotion:
+def stopping_speed(distance, decel, gain):
+    """Speed that stops exactly at `distance` with deceleration `decel`;
+    linear (gain * distance) very close to the goal to avoid chattering."""
+    distance = max(0.0, distance)
+    return min(math.sqrt(2.0 * decel * distance), gain * distance)
 
-    def __init__(self, points, max_speed, max_accel, corner_deviation):
-        self.points = [tuple(p) for p in points]
+
+class SmoothPath:
+
+    def __init__(self, points, yaw, is_clear_pose, max_speed, max_accel,
+                 max_lateral_accel, direction_speed_limit, start_speed=0.0,
+                 max_radius=0.8, step=0.01, shortcut=True):
+        self.yaw = yaw
         self.max_speed = max_speed
         self.max_accel = max_accel
-        self.cumulative = [0.0]
-        for (ax, ay), (bx, by) in zip(self.points, self.points[1:]):
-            self.cumulative.append(self.cumulative[-1] + math.hypot(bx - ax, by - ay))
-        self.length = self.cumulative[-1]
-        # speed limits at points along the path: (s, v)
-        self.limits = []
-        for i in range(1, len(self.points) - 1):
-            turn = self._turn_angle(i)
-            change = 2.0 * math.sin(0.5 * turn)
-            if change > 1e-3:
-                corner = math.sqrt(2.0 * corner_deviation * max_accel / change)
-                self.limits.append((self.cumulative[i], min(max_speed, corner)))
-        self.limits.append((self.length, 0.0))
-        self.s = 0.0
-        self.v = 0.0
+        points = [tuple(p) for p in points]
+        # remove duplicates
+        cleaned = [points[0]]
+        for p in points[1:]:
+            if math.hypot(p[0] - cleaned[-1][0], p[1] - cleaned[-1][1]) > 1e-4:
+                cleaned.append(p)
+        points = cleaned
+        if shortcut and len(points) > 2:
+            points = self._shortcut(points, is_clear_pose, step)
+        self.corners = points
+        self.radii = []
+        self.samples = self._fillet_and_sample(points, is_clear_pose, max_radius, step)
+        self.length = self.samples[-1][5]
+        self._plan_speed(max_lateral_accel, direction_speed_limit, start_speed)
+        self.index = 0
 
-    def _turn_angle(self, i):
-        (ax, ay), (bx, by), (cx, cy) = self.points[i - 1:i + 2]
-        first = math.atan2(by - ay, bx - ax)
-        second = math.atan2(cy - by, cx - bx)
-        return abs(wrap(second - first))
+    # ---------------------------------------------------------------- geometry
+    def _segment_clear(self, a, b, is_clear_pose, step):
+        length = math.hypot(b[0] - a[0], b[1] - a[1])
+        count = max(1, int(math.ceil(length / (2 * step))))
+        return all(is_clear_pose(a[0] + (b[0] - a[0]) * k / count,
+                                 a[1] + (b[1] - a[1]) * k / count)
+                   for k in range(count + 1))
 
-    def allowed_speed(self, s):
-        speed = self.max_speed
-        for limit_s, limit_v in self.limits:
-            if limit_s >= s:
-                speed = min(speed, math.sqrt(
-                    limit_v ** 2 + 2.0 * self.max_accel * (limit_s - s)))
-        return speed
-
-    def step(self, dt):
-        if self.s >= self.length:
-            self.v = 0.0
-            return
-        self.v = min(self.v + self.max_accel * dt,
-                     self.allowed_speed(self.s + self.v * dt))
-        self.s = min(self.length, self.s + self.v * dt)
-        if self.s >= self.length:
-            self.v = 0.0
-
-    @property
-    def finished(self):
-        return self.s >= self.length
-
-    def reference(self):
-        """Reference point, unit tangent and speed."""
-        if self.length <= 0.0:
-            return self.points[-1], (0.0, 0.0), 0.0
+    def _shortcut(self, points, is_clear_pose, step, spacing=0.05):
+        """Greedy string pulling over points every `spacing` m on the polyline,
+        so a shortcut may start or end part-way along a segment."""
+        dense = [points[0]]
+        for a, b in zip(points, points[1:]):
+            length = math.hypot(b[0] - a[0], b[1] - a[1])
+            count = max(1, int(math.ceil(length / spacing)))
+            dense += [(a[0] + (b[0] - a[0]) * k / count,
+                       a[1] + (b[1] - a[1]) * k / count) for k in range(1, count + 1)]
+        points = dense
+        result = [points[0]]
         i = 0
-        while i < len(self.cumulative) - 2 and self.cumulative[i + 1] < self.s:
-            i += 1
-        (ax, ay), (bx, by) = self.points[i], self.points[i + 1]
-        seg = max(1e-9, self.cumulative[i + 1] - self.cumulative[i])
-        t = min(1.0, max(0.0, (self.s - self.cumulative[i]) / seg))
-        tangent = ((bx - ax) / seg, (by - ay) / seg)
-        return (ax + t * (bx - ax), ay + t * (by - ay)), tangent, self.v
+        while i < len(points) - 1:
+            j = len(points) - 1
+            while j > i + 1 and not self._segment_clear(
+                    points[i], points[j], is_clear_pose, step):
+                j -= 1
+            result.append(points[j])
+            i = j
+        # drop points that lie on a straight line
+        cleaned = [result[0]]
+        for k in range(1, len(result) - 1):
+            ax, ay = cleaned[-1]
+            bx, by = result[k]
+            cx, cy = result[k + 1]
+            if abs((bx - ax) * (cy - ay) - (by - ay) * (cx - ax)) > 1e-6:
+                cleaned.append(result[k])
+        cleaned.append(result[-1])
+        return cleaned
+
+    @staticmethod
+    def _arc(corner, before, after, radius):
+        """Fillet of radius at corner: (tangent point in, out, center, angle)."""
+        bx, by = corner
+        ux, uy = before[0] - bx, before[1] - by
+        vx, vy = after[0] - bx, after[1] - by
+        lu, lv = math.hypot(ux, uy), math.hypot(vx, vy)
+        ux, uy, vx, vy = ux / lu, uy / lu, vx / lv, vy / lv
+        interior = math.acos(max(-1.0, min(1.0, ux * vx + uy * vy)))
+        turn = math.pi - interior
+        tangent = radius * math.tan(0.5 * turn)
+        p_in = (bx + ux * tangent, by + uy * tangent)
+        p_out = (bx + vx * tangent, by + vy * tangent)
+        # center along the bisector
+        hx, hy = ux + vx, uy + vy
+        lh = math.hypot(hx, hy)
+        dist = radius / math.cos(0.5 * turn)
+        center = (bx + hx / lh * dist, by + hy / lh * dist)
+        return p_in, p_out, center, turn, tangent
+
+    def _arc_points(self, p_in, p_out, center, step):
+        a0 = math.atan2(p_in[1] - center[1], p_in[0] - center[0])
+        a1 = math.atan2(p_out[1] - center[1], p_out[0] - center[0])
+        delta = wrap(a1 - a0)
+        radius = math.hypot(p_in[0] - center[0], p_in[1] - center[1])
+        count = max(2, int(math.ceil(abs(delta) * radius / step)))
+        return [(center[0] + radius * math.cos(a0 + delta * k / count),
+                 center[1] + radius * math.sin(a0 + delta * k / count))
+                for k in range(count + 1)], radius, delta
+
+    def _fillet_and_sample(self, points, is_clear_pose, max_radius, step):
+        # choose radii corner by corner (tangent length <= half of each side,
+        # whole side for the first and last segment)
+        fillets = [None] * len(points)
+        for i in range(1, len(points) - 1):
+            prev_len = math.hypot(points[i][0] - points[i - 1][0],
+                                  points[i][1] - points[i - 1][1])
+            next_len = math.hypot(points[i + 1][0] - points[i][0],
+                                  points[i + 1][1] - points[i][1])
+            limit_prev = prev_len * (1.0 if i == 1 else 0.5)
+            limit_next = next_len * (1.0 if i == len(points) - 2 else 0.5)
+            radius = max_radius
+            chosen = None
+            while radius >= 0.02:
+                p_in, p_out, center, turn, tangent = self._arc(
+                    points[i], points[i - 1], points[i + 1], radius)
+                if turn < 1e-3:
+                    break
+                if tangent <= min(limit_prev, limit_next):
+                    arc, _, _ = self._arc_points(p_in, p_out, center, 2 * step)
+                    if all(is_clear_pose(x, y) for x, y in arc):
+                        chosen = (p_in, p_out, center)
+                        break
+                radius *= 0.85
+            fillets[i] = chosen
+            self.radii.append(round(radius, 3) if chosen else 0.0)
+
+        samples = []  # x, y, tx, ty, curvature, s
+
+        def add_line(a, b):
+            length = math.hypot(b[0] - a[0], b[1] - a[1])
+            if length < 1e-6:
+                return
+            tx, ty = (b[0] - a[0]) / length, (b[1] - a[1]) / length
+            count = max(1, int(math.ceil(length / step)))
+            for k in range(0 if not samples else 1, count + 1):
+                append(a[0] + (b[0] - a[0]) * k / count,
+                       a[1] + (b[1] - a[1]) * k / count, tx, ty, 0.0)
+
+        def append(x, y, tx, ty, curvature):
+            if samples:
+                s = samples[-1][5] + math.hypot(x - samples[-1][0], y - samples[-1][1])
+            else:
+                s = 0.0
+            samples.append((x, y, tx, ty, curvature, s))
+
+        current = points[0]
+        for i in range(1, len(points)):
+            fillet = fillets[i] if i < len(points) - 1 else None
+            if fillet is None:
+                add_line(current, points[i])
+                current = points[i]
+                continue
+            p_in, p_out, center = fillet
+            add_line(current, p_in)
+            arc, radius, delta = self._arc_points(p_in, p_out, center, step)
+            sign = 1.0 if delta > 0 else -1.0
+            for x, y in arc[1:]:
+                rx, ry = x - center[0], y - center[1]
+                tx, ty = -sign * ry / radius, sign * rx / radius
+                append(x, y, tx, ty, 1.0 / radius)
+            current = p_out
+        if len(samples) == 1:
+            samples.append(samples[0][:5] + (0.0,))
+        return samples
+
+    # ---------------------------------------------------------------- speed
+    def _plan_speed(self, max_lateral_accel, direction_speed_limit, start_speed):
+        n = len(self.samples)
+        limit = []
+        for x, y, tx, ty, curvature, s in self.samples:
+            v = self.max_speed
+            # body-frame direction at the fixed heading
+            direction = math.atan2(ty, tx) - self.yaw
+            v = min(v, direction_speed_limit(direction))
+            if curvature > 1e-6:
+                v = min(v, math.sqrt(max_lateral_accel / curvature))
+            limit.append(v)
+
+        def tangential(v, curvature):
+            lateral = v * v * curvature
+            return math.sqrt(max(self.max_accel ** 2 - lateral ** 2,
+                                 (0.2 * self.max_accel) ** 2))
+
+        speed = list(limit)
+        speed[0] = min(speed[0], start_speed)
+        for i in range(1, n):
+            ds = self.samples[i][5] - self.samples[i - 1][5]
+            a = tangential(speed[i - 1], self.samples[i - 1][4])
+            speed[i] = min(speed[i], math.sqrt(speed[i - 1] ** 2 + 2 * a * ds))
+        speed[-1] = 0.0
+        for i in range(n - 2, -1, -1):
+            ds = self.samples[i + 1][5] - self.samples[i][5]
+            a = tangential(speed[i + 1], self.samples[i + 1][4])
+            speed[i] = min(speed[i], math.sqrt(speed[i + 1] ** 2 + 2 * a * ds))
+        self.speed = speed
+        self.speed_limit = limit
+
+    def planned_time(self):
+        total = 0.0
+        for i in range(1, len(self.samples)):
+            ds = self.samples[i][5] - self.samples[i - 1][5]
+            v = 0.5 * (self.speed[i] + self.speed[i - 1])
+            total += ds / max(v, 1e-3)
+        return total
+
+    # ---------------------------------------------------------------- tracking
+    def project(self, x, y, window=200):
+        """Index of the closest sample, searched forward from the last one."""
+        best, best_d = self.index, float("inf")
+        start = max(0, self.index - 20)
+        for i in range(start, min(len(self.samples), self.index + window)):
+            sx, sy = self.samples[i][0], self.samples[i][1]
+            d = (sx - x) ** 2 + (sy - y) ** 2
+            if d < best_d:
+                best, best_d = i, d
+        self.index = best
+        return best
+
+    def sample_at(self, s):
+        lo, hi = self.index, len(self.samples) - 1
+        while lo < hi and self.samples[lo][5] < s:
+            lo += 1
+        return lo
 
     @property
     def goal(self):
-        return self.points[-1]
-
-
-class YawMotion:
-
-    def __init__(self, yaw_from, yaw_to, max_rate, max_accel):
-        self.start = yaw_from
-        self.delta = wrap(yaw_to - yaw_from)
-        self.goal_yaw = yaw_from + self.delta
-        self.max_rate = max_rate
-        self.max_accel = max_accel
-        self.progress = 0.0
-        self.rate = 0.0
-
-    def step(self, dt):
-        remaining = abs(self.delta) - self.progress
-        if remaining <= 0.0:
-            self.rate = 0.0
-            return
-        allowed = math.sqrt(2.0 * self.max_accel * max(0.0, remaining - self.rate * dt))
-        self.rate = min(self.rate + self.max_accel * dt, self.max_rate, allowed)
-        self.progress = min(abs(self.delta), self.progress + self.rate * dt)
-
-    @property
-    def finished(self):
-        return self.progress >= abs(self.delta)
-
-    def reference(self):
-        sign = 1.0 if self.delta >= 0 else -1.0
-        return self.start + sign * self.progress, sign * self.rate
+        return self.samples[-1][0], self.samples[-1][1]
 
 
 class CommandShaper:

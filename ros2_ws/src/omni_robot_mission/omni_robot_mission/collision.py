@@ -34,10 +34,10 @@ class OccupancyChecker:
         ys = [p[1] for p in self.outline]
         return max(xs), -min(xs), max(ys), -min(ys)
 
-    def pose_collides(self, x, y, yaw, use_keepout=False):
+    def pose_collides(self, x, y, yaw, use_keepout=False, margin=None):
         """True when the outline (grown by margin) overlaps an occupied cell."""
         front, back, left, right = self._half_extents()
-        grow = self.margin + self.cell_radius
+        grow = (self.margin if margin is None else margin) + self.cell_radius
         reach = math.hypot(max(front, back), max(left, right)) + grow
         near = self.points[
             (np.abs(self.points[:, 0] - x) <= reach)
