@@ -75,7 +75,13 @@ lidar:
   range_min: 0.1
   range_max: 30.0
   noise_stddev: 0.01        # 仮値: spec accuracy +-30 mm taken as about 3 sigma
-  body_size: [0.060, 0.060, 0.087]   # visual only
+  # Body (x along the scan origin's forward axis). The scan origin is at the
+  # body center, so the body sticks out of the chassis by
+  # outward_offset + body_size[0] / 2; that part is added to the outline.
+  body_size: [0.060, 0.060, 0.087]
+  # Self-occlusion mask: computed from the chassis and wheel shapes at the
+  # scan height (geometry.lidar_self_occlusion), widened by this margin.
+  self_mask_margin_deg: 1.0   # 仮値
   # Nominal mounting (what the robot believes; TF uses these values).
   mount:
     face: "-y"              # 仮値: chassis face the sensor looks out of (+x, -x, +y, -y)

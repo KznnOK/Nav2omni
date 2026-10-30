@@ -86,6 +86,9 @@ setup(
 
         "odometry_comparison = "
         "omni_robot_gazebo.odometry_comparison:main",
+
+        "lidar_mount_study = "
+        "omni_robot_gazebo.lidar_mount_study:main",
         ],
     },
 )

@@ -9,7 +9,7 @@ from sensor_msgs.msg import JointState
 from tf2_ros import TransformBroadcaster
 
 from omni_robot_description.geometry import (
-    drive_wheel_layout, drive_wheel_radius, load_geometry)
+    drive_wheel_layout, drive_wheel_radius, load_geometry, default_geometry_file)
 
 
 class OmniOdometry(Node):
@@ -19,7 +19,9 @@ class OmniOdometry(Node):
         super().__init__("omni_odometry")
 
         # Defaults come from robot_geometry.yaml
-        geometry = load_geometry()
+        geometry = load_geometry(
+            self.declare_parameter(
+                "geometry_file", default_geometry_file()).value)
         joint_names, wheel_x, wheel_y, wheel_yaw = drive_wheel_layout(geometry)
         self.declare_parameter("wheel_radius", drive_wheel_radius(geometry))
         self.declare_parameter("wheel_joint_names", joint_names)

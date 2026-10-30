@@ -18,7 +18,8 @@ from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from sensor_msgs.msg import Imu, JointState
 
-from omni_robot_description.geometry import load_geometry, tracking_wheel_layout
+from omni_robot_description.geometry import (
+    default_geometry_file, load_geometry, tracking_wheel_layout)
 
 
 def stamp_seconds(stamp):
@@ -31,7 +32,9 @@ class TrackingOdometry(Node):
         super().__init__("tracking_odometry")
 
         # Defaults come from robot_geometry.yaml
-        names, radius, xs, ys, angles = tracking_wheel_layout(load_geometry())
+        names, radius, xs, ys, angles = tracking_wheel_layout(load_geometry(
+            self.declare_parameter(
+                "geometry_file", default_geometry_file()).value))
         self.declare_parameter("wheel_joint_names", names)
         self.declare_parameter("wheel_radius", radius)
         self.declare_parameter("wheel_x", xs)

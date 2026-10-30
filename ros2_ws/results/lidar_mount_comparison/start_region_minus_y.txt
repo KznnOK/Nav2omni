@@ -1,0 +1,20 @@
+face -y
+mask_deg [-136.00, -89.05], [89.05, 136.00]
+outline_extents +x=0.250, -x=0.250, +y=0.250, -y=0.280
+start_center x=-1.025 y=-3.097
+start yaw -10: dx -0.300 .. +0.300  dy -0.018 .. +0.044
+start yaw  -5: dx -0.300 .. +0.300  dy -0.014 .. +0.064
+start yaw  +0: dx -0.300 .. +0.300  dy -0.014 .. +0.084
+start yaw  +5: dx -0.300 .. +0.300  dy -0.014 .. +0.064
+start yaw +10: dx -0.300 .. +0.300  dy -0.018 .. +0.044
+start_feasible_fraction 0.245
+route start_dice_front: ok
+route exit_area1: ok
+route below_l_left: ok
+route zigzag_low: ok
+route zigzag_shift: ok
+route zigzag_high: ok
+route sakura_before_rotation: ok
+route rotation_point_0deg: ok
+route rotation_point_90deg: ok
+route sakura_after_rotation: ok

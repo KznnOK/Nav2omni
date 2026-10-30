@@ -14,8 +14,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 from launch.substitutions import Command, LaunchConfiguration
 
 
-def spawn_with_sim_errors(context, xacro_file, controllers_file,
-                          geometry_file):
+def spawn_with_sim_errors(context, xacro_file, controllers_file):
     """Spawn the Gazebo model with the mounting errors of sim_conditions.yaml.
 
     robot_state_publisher keeps the nominal description, so the errors stay
@@ -27,7 +26,8 @@ def spawn_with_sim_errors(context, xacro_file, controllers_file,
     args = [
         "xacro", xacro_file,
         f"controllers_file:={controllers_file}",
-        f"geometry_file:={geometry_file}",
+        "geometry_file:="
+        + LaunchConfiguration("geometry_file").perform(context),
     ]
     for key in ("x", "y", "z", "roll_deg", "pitch_deg", "yaw_deg"):
         args.append(f"lidar_err_{key}:={float(error.get(key, 0.0))}")
@@ -89,11 +89,7 @@ def generate_launch_description():
         "config",
         "omni_controllers.yaml"
     )
-    geometry_file = os.path.join(
-        description_share,
-        "config",
-        "robot_geometry.yaml",
-    )
+    geometry_file = LaunchConfiguration("geometry_file")
 
     gazebo_params_file = os.path.join(
         gazebo_share,
@@ -153,7 +149,7 @@ def generate_launch_description():
 
     spawn_robot = OpaqueFunction(
         function=spawn_with_sim_errors,
-        args=[xacro_file, controllers_file, geometry_file],
+        args=[xacro_file, controllers_file],
     )
 
     joint_state_broadcaster_spawner = Node(
@@ -189,6 +185,7 @@ def generate_launch_description():
         parameters=[
             {
                 "use_sim_time": True,
+                "geometry_file": geometry_file,
             },
         ],
     )
@@ -200,6 +197,11 @@ def generate_launch_description():
         DeclareLaunchArgument("spawn_z", default_value="0.02"),
         DeclareLaunchArgument("spawn_yaw", default_value="0.0"),
         DeclareLaunchArgument("gui", default_value="true"),
+        DeclareLaunchArgument(
+            "geometry_file",
+            default_value=os.path.join(
+                description_share, "config", "robot_geometry.yaml"),
+        ),
         DeclareLaunchArgument(
             "sim_conditions",
             default_value=os.path.join(

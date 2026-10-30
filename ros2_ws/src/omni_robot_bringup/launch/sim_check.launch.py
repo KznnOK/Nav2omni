@@ -30,6 +30,7 @@ def generate_launch_description():
     x = LaunchConfiguration("x")
     y = LaunchConfiguration("y")
     yaw = LaunchConfiguration("yaw")
+    geometry_file = LaunchConfiguration("geometry_file")
 
     gazebo = include_launch("omni_robot_gazebo", "gazebo.launch.py", {
         "spawn_x": x,
@@ -37,12 +38,16 @@ def generate_launch_description():
         "spawn_yaw": yaw,
         "gui": LaunchConfiguration("gui"),
         "sim_conditions": LaunchConfiguration("sim_conditions"),
+        "geometry_file": geometry_file,
     })
-    odometry = include_launch("omni_robot_gazebo", "odometry.launch.py")
+    odometry = include_launch("omni_robot_gazebo", "odometry.launch.py", {
+        "geometry_file": geometry_file,
+    })
     localization = include_launch("omni_robot_nav2", "localization.launch.py", {
         "initial_x": x,
         "initial_y": y,
         "initial_yaw": yaw,
+        "geometry_file": geometry_file,
     })
 
     # Simulation only: /ground_truth/odom is in Gazebo's "world" frame, which
@@ -72,6 +77,12 @@ def generate_launch_description():
         DeclareLaunchArgument("yaw", default_value="0.0"),
         DeclareLaunchArgument("gui", default_value="true"),
         DeclareLaunchArgument("rviz", default_value="true"),
+        DeclareLaunchArgument(
+            "geometry_file",
+            default_value=str(
+                Path(get_package_share_directory("omni_robot_description"))
+                / "config" / "robot_geometry.yaml"),
+        ),
         DeclareLaunchArgument(
             "sim_conditions",
             default_value=str(

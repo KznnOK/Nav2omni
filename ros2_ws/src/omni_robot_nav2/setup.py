@@ -43,7 +43,6 @@ setup(
                 "config/amcl.yaml",
                 "config/nav2_params.yaml",
                 "config/mission.yaml",
-                "config/laser_filter.yaml",
             ],
         ),
     ],

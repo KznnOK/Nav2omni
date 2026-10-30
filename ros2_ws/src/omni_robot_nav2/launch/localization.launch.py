@@ -2,10 +2,42 @@ from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
+
+from omni_robot_description.geometry import (
+    default_geometry_file, lidar_self_occlusion, load_geometry)
+
+
+def laser_mask_filter(context):
+    """laser_filters chain masking the angles blocked by the robot itself.
+
+    The angles are computed from robot_geometry.yaml (chassis and wheel
+    shapes at the scan height), so they follow the LiDAR mounting.
+    """
+    geometry = load_geometry(
+        LaunchConfiguration("geometry_file").perform(context))
+    parameters = {"use_sim_time": True}
+    for index, (lower, upper) in enumerate(lidar_self_occlusion(geometry), 1):
+        prefix = f"filter{index}"
+        parameters[f"{prefix}.name"] = f"self_mask_{index}"
+        parameters[f"{prefix}.type"] = (
+            "laser_filters/LaserScanAngularBoundsFilterInPlace")
+        parameters[f"{prefix}.params.lower_angle"] = lower
+        parameters[f"{prefix}.params.upper_angle"] = upper
+    return [Node(
+        package="laser_filters",
+        executable="scan_to_scan_filter_chain",
+        name="scan_to_scan_filter_chain",
+        output="screen",
+        parameters=[parameters],
+        remappings=[
+            ("scan", "/scan"),
+            ("scan_filtered", "/scan_filtered"),
+        ],
+    )]
 
 
 def generate_launch_description():
@@ -25,29 +57,15 @@ def generate_launch_description():
         / "amcl.yaml"
     )
 
-    laser_filter_file = (
-        package_share
-        / "config"
-        / "laser_filter.yaml"
-    )
-
     return LaunchDescription([
         # Defaults match the initial pose in amcl.yaml (original start zone).
         DeclareLaunchArgument("initial_x", default_value="-3.1510900301327864"),
         DeclareLaunchArgument("initial_y", default_value="-3.136311120883107"),
         DeclareLaunchArgument("initial_yaw", default_value="0.0"),
+        DeclareLaunchArgument(
+            "geometry_file", default_value=default_geometry_file()),
         # Masks the angles where the LiDAR sees the robot itself.
-        Node(
-            package="laser_filters",
-            executable="scan_to_scan_filter_chain",
-            name="scan_to_scan_filter_chain",
-            output="screen",
-            parameters=[str(laser_filter_file)],
-            remappings=[
-                ("scan", "/scan"),
-                ("scan_filtered", "/scan_filtered"),
-            ],
-        ),
+        OpaqueFunction(function=laser_mask_filter),
         Node(
             package="nav2_map_server",
             executable="map_server",

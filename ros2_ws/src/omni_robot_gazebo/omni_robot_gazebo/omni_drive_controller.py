@@ -6,7 +6,7 @@ from rclpy.node import Node
 from std_msgs.msg import Float64MultiArray
 
 from omni_robot_description.geometry import (
-    drive_wheel_layout, drive_wheel_radius, load_geometry)
+    drive_wheel_layout, drive_wheel_radius, load_geometry, default_geometry_file)
 
 
 class OmniDriveController(Node):
@@ -16,7 +16,9 @@ class OmniDriveController(Node):
         super().__init__("omni_drive_controller")
 
         # Robot parameters default to robot_geometry.yaml
-        geometry = load_geometry()
+        geometry = load_geometry(
+            self.declare_parameter(
+                "geometry_file", default_geometry_file()).value)
         _, wheel_x, wheel_y, wheel_yaw = drive_wheel_layout(geometry)
         self.declare_parameter("wheel_radius", drive_wheel_radius(geometry))
         self.declare_parameter("wheel_x", wheel_x)
