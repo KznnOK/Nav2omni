@@ -2,15 +2,16 @@
 # phase 2. Phase 4 replaces this with the real waypoint graph.
 # Poses are [x, y, yaw_deg] of base_footprint in the map frame.
 # Derivation (chassis half width 0.25 m, clearances 0.05-0.10 m):
-#   start   dice zone left line outer edge x=-0.725 -> -0.725-0.25-0.05
+#   start   dice zone left line outer edge x=-0.725 -> -0.725-0.28-0.05
+#           (+x outline 0.28 with the LiDAR body)
 #   exit    below the L-frame, above the area1 frame (y -2.724 .. -1.624)
 #   zigzag  pass stub_lower (tip x=-2.962) at x>=-2.612 and stub_middle
 #           (x>=-2.400) at x<=-2.75
 #   sakura  zone right edge x=-2.962 -> -2.962+0.25+0.05, zone center y=1.774
 #   rotate  rotation radius 0.354 needs x >= -2.962+0.354 -> -2.55
 points:
-  - {name: start_dice_front, pose: [-1.025, -3.112, 0.0]}
-  - {name: exit_area1, pose: [-1.025, -2.200, 0.0]}
+  - {name: start_dice_front, pose: [-1.055, -3.112, 0.0]}
+  - {name: exit_area1, pose: [-1.055, -2.200, 0.0]}
   - {name: below_l_left, pose: [-2.550, -2.200, 0.0]}
   - {name: zigzag_low, pose: [-2.550, -0.350, 0.0]}
   - {name: zigzag_shift, pose: [-2.750, -0.350, 0.0]}

@@ -1,0 +1,10 @@
+mode_manager:
+  ros__parameters:
+    # PS4 controller through the joy node (joy_linux mapping):
+    # 0 cross, 1 circle, 2 triangle, 3 square, 4 L1, 5 R1, 6 L2, 7 R2,
+    # 8 SHARE, 9 OPTIONS, 10 PS, 11 L3, 12 R3
+    toggle_button: 9          # 仮値: OPTIONS toggles MANUAL <-> AUTO (rising edge)
+    cmd_timeout_s: 0.2        # selected input silent this long -> zero command
+    require_joy: true         # false in simulation without a controller
+    joy_timeout_s: 0.5        # /joy silent this long -> zero, AUTO -> MANUAL
+    publish_rate: 50.0

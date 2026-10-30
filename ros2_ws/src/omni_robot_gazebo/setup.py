@@ -89,6 +89,9 @@ setup(
 
         "lidar_mount_study = "
         "omni_robot_gazebo.lidar_mount_study:main",
+
+        "mission_trial = "
+        "omni_robot_gazebo.mission_trial:main",
         ],
     },
 )

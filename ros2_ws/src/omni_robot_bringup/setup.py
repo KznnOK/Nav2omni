@@ -23,6 +23,7 @@ setup(
                 "launch/simulation.launch.py",
                 "launch/experiment.launch.py",
                 "launch/sim_check.launch.py",
+                "launch/sim_mission.launch.py",
             ],
         ),
         (

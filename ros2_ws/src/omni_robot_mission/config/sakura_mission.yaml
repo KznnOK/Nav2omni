@@ -1,0 +1,79 @@
+# Sakura round trip: dice-zone front -> sakura zone -> dice-zone front.
+# Map frame = rulebook figure 4 frame (field center origin, +x right, +y up).
+#
+# Robot outline (robot_geometry.yaml): +x 0.28 (chassis 0.25 + LiDAR body),
+# -x/+y/-y 0.25. Field values below come from field_layout.yaml:
+#   sakura zone  x -3.462 .. -2.962 (500 wide against the left frame),
+#                y  1.224 ..  2.324 (between the 38 mm frames 1100 apart)
+#   dice zone left line, outer edge x = -0.725; area 1 y -3.462 .. -2.762
+sakura_mission:
+  ros__parameters:
+    # --- waypoint graph (仮値: chosen with >= 0.05 m clearance) -----------
+    # Each waypoint is "name x y". Edges are "name name" (both directions).
+    waypoints:
+      - "dice_front -1.055 -3.112"   # area 1 center; +x edge 0.05 left of the dice line
+      - "area1_exit -1.055 -2.200"   # above area 1, below the L frame
+      - "below_l -2.550 -2.200"
+      - "zigzag_low -2.550 -0.350"   # left edge 0.16 right of stub_lower tip (x -2.962)
+      - "zigzag_shift -2.750 -0.350"
+      - "zigzag_high -2.750 0.600"   # +x edge 0.07 left of stub_middle tip (x -2.400)
+      - "sakura_lane -2.662 0.600"
+      - "sakura_stop -2.662 1.774"
+    edges:
+      - "dice_front area1_exit"
+      - "area1_exit below_l"
+      - "below_l zigzag_low"
+      - "zigzag_low zigzag_shift"
+      - "zigzag_shift zigzag_high"
+      - "zigzag_high sakura_lane"
+      - "sakura_lane sakura_stop"
+
+    # --- mission poses ---------------------------------------------------
+    # Sakura stop: left (-x) arm face toward the zone, theta = 0.
+    #   x = zone right edge -2.962 + standoff 0.05 (仮値) + -x outline 0.25
+    #   y = zone center (1.224 + 2.324) / 2 = 1.774
+    sakura_node: "sakura_stop"
+    sakura_yaw_deg: 0.0
+    # After the CCW 90 deg turn the +y arm face points to the zone (-x).
+    # +y outline is also 0.25, so the same x keeps the same standoff.
+    sakura_rotated_yaw_deg: 90.0
+    sakura_wait_s: 3.0
+    # Return (帰着) pose: default is the dice-front node with the start yaw.
+    return_node: "dice_front"
+    return_x: -1.055
+    return_y: -3.112
+    return_yaw_deg: 0.0
+    # Heading kept while travelling (fixed; no rotation in narrow passages).
+    travel_yaw_deg: 0.0
+
+    # Rotation at the sakura zone must not sweep into walls (map) or into
+    # these keep-out rectangles "x0 x1 y0 y1" (bottles in the sakura zone).
+    rotation_keepout:
+      - "-3.462 -2.962 1.224 2.324"
+    # If it would, back off along this map-frame direction, rotate, re-approach.
+    rotation_backoff_direction: [1.0, 0.0]
+    rotation_backoff_max: 0.5
+    clearance_margin: 0.02          # 仮値: extra margin for every collision check
+
+    # --- tolerances -------------------------------------------------------
+    position_tolerance: 0.05        # +-50 mm per axis at the sakura zone
+    yaw_tolerance_deg: 2.0          # 仮値
+    return_position_tolerance: 0.05 # 仮値
+    return_yaw_tolerance_deg: 2.0   # 仮値
+    stop_speed: 0.02                # m/s, considered stopped
+    stop_confirm_s: 0.2
+    state_timeout_s: 30.0
+
+    # --- motion limits (to be tuned by the speed/acceleration sweep) -----
+    max_speed: 1.0                  # m/s (仮値)
+    max_accel: 2.0                  # m/s^2 (仮値)
+    max_yaw_rate: 3.0               # rad/s (仮値)
+    max_yaw_accel: 6.0              # rad/s^2 (仮値)
+    # Corner speed is chosen so that the path overshoot at a corner stays
+    # below this distance: v_c = sqrt(2 * d * a / (2 sin(turn / 2))).
+    corner_deviation: 0.02          # m (仮値)
+    # Tracking controller
+    position_gain: 4.0              # 1/s
+    yaw_gain: 5.0                   # 1/s
+    command_accel_ratio: 1.3        # command accel limit = ratio * max_accel
+    control_rate: 50.0              # Hz

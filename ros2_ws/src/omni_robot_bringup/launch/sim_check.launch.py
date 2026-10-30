@@ -70,9 +70,9 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        # Dice-zone front: dice zone left line outer edge x = -0.725,
-        # minus half chassis 0.25 and a 0.05 m standoff (仮値).
-        DeclareLaunchArgument("x", default_value="-1.025"),
+        # Dice-zone front: dice zone left line outer edge x = -0.725, minus the
+        # +x outline 0.28 (chassis 0.25 + LiDAR body) and a 0.05 m standoff (仮値).
+        DeclareLaunchArgument("x", default_value="-1.055"),
         DeclareLaunchArgument("y", default_value="-3.112"),
         DeclareLaunchArgument("yaw", default_value="0.0"),
         DeclareLaunchArgument("gui", default_value="true"),

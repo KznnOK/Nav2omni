@@ -177,6 +177,35 @@ Visualization Manager:
       Covariance:
         Value: false
       Value: false
+    - Class: rviz_default_plugins/Path
+      Name: Mission path (/mission/path)
+      Enabled: true
+      Topic:
+        Value: /mission/path
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+        Depth: 1
+      Color: 255; 0; 255
+      Line Style: Lines
+      Pose Style: Axes
+      Axes Length: 0.15
+      Axes Radius: 0.015
+      Value: true
+    - Class: rviz_default_plugins/Pose
+      Name: Mission target (/mission/target)
+      Enabled: true
+      Topic:
+        Value: /mission/target
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+        Depth: 1
+      Shape: Arrow
+      Color: 255; 255; 0
+      Shaft Length: 0.3
+      Shaft Radius: 0.02
+      Head Length: 0.08
+      Head Radius: 0.05
+      Value: true
   Global Options:
     Background Color: 48; 48; 48
     Fixed Frame: map

@@ -84,7 +84,7 @@ lidar:
   self_mask_margin_deg: 1.0   # 仮値
   # Nominal mounting (what the robot believes; TF uses these values).
   mount:
-    face: "-y"              # 仮値: chassis face the sensor looks out of (+x, -x, +y, -y)
+    face: "+x"              # chassis face the sensor looks out of (+x, -x, +y, -y); decided 2026-10-30
     outward_offset: 0.0     # 仮値: scan origin distance outside that face
     lateral_offset: 0.0     # 仮値: along the face, + is to the left when looking outward
     scan_height: 0.060      # 仮値: scan plane above the floor (must be < 0.089 frame height)

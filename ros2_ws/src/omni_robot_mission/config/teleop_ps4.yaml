@@ -1,0 +1,23 @@
+# teleop_twist_joy for a PS4 controller (joy_linux axes: 0 LX, 1 LY, 2 L2,
+# 3 RX, 4 RY, 5 R2). Output is remapped to /cmd_vel_manual.
+# 仮値: speeds and buttons are to be adjusted by the operator.
+teleop_twist_joy_node:
+  ros__parameters:
+    require_enable_button: true
+    enable_button: 4          # L1 held = drive
+    enable_turbo_button: 5    # R1 held = turbo
+    axis_linear:
+      x: 1
+      y: 0
+    scale_linear:
+      x: 0.5
+      y: 0.5
+    scale_linear_turbo:
+      x: 1.5
+      y: 1.5
+    axis_angular:
+      yaw: 3
+    scale_angular:
+      yaw: 1.5
+    scale_angular_turbo:
+      yaw: 3.0
