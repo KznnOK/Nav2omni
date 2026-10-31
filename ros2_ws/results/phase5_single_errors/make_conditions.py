@@ -42,6 +42,7 @@ CONDITIONS = {
     "lidar_yaw_1": [("lidar_mount_error", {"yaw_deg": 1.0})],
     "lidar_pos_5mm": [("lidar_mount_error", {"x": 0.005, "y": 0.005})],
     "drive_mu2_0.4": [("drive_wheel_error", {"mu2_scale": 0.4})],
+    "drive_mu2_0.5": [("drive_wheel_error", {"mu2_scale": 0.5})],
     "drive_mu2_0.6": [("drive_wheel_error", {"mu2_scale": 0.6})],
     "drive_mu2_0.8": [("drive_wheel_error", {"mu2_scale": 0.8})],
 }

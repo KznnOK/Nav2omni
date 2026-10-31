@@ -346,8 +346,6 @@ class SakuraMission(Node):
         # larger than max_accel; the command must be able to follow that.
         accel = max(float(self.param("max_accel")),
                     float(self.param("max_lateral_accel")))
-        if self.friction.enabled:  # no direction can exceed the face value
-            accel = min(accel, self.friction.min_accel() * math.sqrt(2.0))
         self.shaper = CommandShaper(
             float(self.param("max_speed")) * 1.05,
             accel * ratio,
@@ -616,7 +614,7 @@ class SakuraMission(Node):
                           est_x=x, est_y=y, est_yaw=yaw,
                           raw_vx=vx, raw_vy=vy, raw_wz=wz)
 
-        vx, vy, wz = self.shaper.shape(vx, vy, wz, self.dt)
+        vx, vy, wz = self.shaper.shape(vx, vy, wz, self.dt, yaw, self.friction)
         self.last_command = (vx, vy, wz)
         self.publish_command(vx, vy, wz, yaw)
 

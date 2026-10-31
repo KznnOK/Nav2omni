@@ -397,13 +397,19 @@ class CommandShaper:
     def reset(self, vx=0.0, vy=0.0, wz=0.0):
         self.vx, self.vy, self.wz = vx, vy, wz
 
-    def shape(self, vx, vy, wz, dt):
+    def shape(self, vx, vy, wz, dt, yaw=0.0, friction=None):
+        """`friction` (FrictionLimit, optional): also caps the acceleration of
+        every command, including the stop/re-approach corrections, by the
+        wheel friction in the body-frame direction of the velocity change."""
         speed = math.hypot(vx, vy)
         if speed > self.max_speed:
             vx, vy = vx * self.max_speed / speed, vy * self.max_speed / speed
         dvx, dvy = vx - self.vx, vy - self.vy
         change = math.hypot(dvx, dvy)
-        limit = self.max_accel * dt
+        accel = self.max_accel
+        if friction is not None and friction.enabled and change > 1e-9:
+            accel = min(accel, friction.max_accel(math.atan2(dvy, dvx) - yaw))
+        limit = accel * dt
         if change > limit:
             dvx, dvy = dvx * limit / change, dvy * limit / change
         self.vx += dvx
