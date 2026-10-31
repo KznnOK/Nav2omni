@@ -9,3 +9,12 @@
 未完了の条件なし。`runs.csv` は結合済み（66回 + `runs_resume.csv` の30回、ラベルの重複なし）、
 `table.md` / `summary.json` は96回分から作り直した。`runs_resume.csv` は再開分の原本として残してある。
 drive_slip は6回すべて失敗（GO_SAKURA / BACKOFF_1 でタイムアウト＋壁接触）。仮値が大きすぎる可能性があるため、結論の前に値を見直すこと。
+
+## 再開コマンド（個別の条件だけやり直す場合）
+```bash
+cd /home/ubuntu/robocon_study/ros2/omni_nav2/ros2_ws
+source /opt/ros/humble/setup.bash && colcon build && source install/setup.bash
+CONDS="drive_slip" results/phase5_single_error/run_conditions.sh | tee /tmp/phase5_resume.out   # 結果は runs_resume.csv に追記
+python3 results/phase5_single_error/p5_table.py <結合したruns.csv> results/phase5_single_error/timeseries > results/phase5_single_error/table.md
+results/phase5_single_error/stop_sim.sh   # 停止
+```
