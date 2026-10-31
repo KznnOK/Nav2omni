@@ -31,4 +31,4 @@ tracking_wheel_error:
   seed: 1
 
 drive_wheel_error:
-  mu_rolling_scale: 1.0        # friction along rolling (slip when lowered)
+  mu2_scale: 1.0               # drive wheels only: scale of mu2 (friction along the rolling direction = driving force limit); mu2 = mu_rolling x scale

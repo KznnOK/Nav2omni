@@ -23,4 +23,4 @@ tracking_wheel_error:
   lift_duration_s: 0.02
   seed: 1
 drive_wheel_error:
-  mu_rolling_scale: 1.0
+  mu2_scale: 1.0

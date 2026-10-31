@@ -16,7 +16,7 @@ BASE = {
                    {"dx": 0.0, "dy": 0.0, "angle_deg": 0.0}],
         "quantize": False, "lift_rate_hz": 0.0, "lift_duration_s": 0.02,
         "seed": 1},
-    "drive_wheel_error": {"mu_rolling_scale": 1.0},
+    "drive_wheel_error": {"mu2_scale": 1.0},
 }
 
 # name: (section, changes). Values are 仮値 (see README).
@@ -41,7 +41,9 @@ CONDITIONS = {
     "lidar_roll_1": [("lidar_mount_error", {"roll_deg": 1.0})],
     "lidar_yaw_1": [("lidar_mount_error", {"yaw_deg": 1.0})],
     "lidar_pos_5mm": [("lidar_mount_error", {"x": 0.005, "y": 0.005})],
-    "drive_slip": [("drive_wheel_error", {"mu_rolling_scale": 0.4})],
+    "drive_mu2_0.4": [("drive_wheel_error", {"mu2_scale": 0.4})],
+    "drive_mu2_0.6": [("drive_wheel_error", {"mu2_scale": 0.6})],
+    "drive_mu2_0.8": [("drive_wheel_error", {"mu2_scale": 0.8})],
 }
 
 if __name__ == "__main__":

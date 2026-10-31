@@ -1,0 +1,40 @@
+[
+ {
+  "cond": "drive_mu2_0.4_conservative",
+  "lidar": "あり",
+  "n": 3,
+  "ok": 0,
+  "t_mean": NaN,
+  "t_max": NaN,
+  "go": NaN,
+  "rot": NaN,
+  "ret": NaN,
+  "stop": 36.0,
+  "ov": NaN,
+  "se": NaN,
+  "cgo": 65.41670215839298,
+  "cret": 9000.0,
+  "est": 25.9,
+  "contact": 0,
+  "fails": "mission failed: timeout in BACKOFF_1"
+ },
+ {
+  "cond": "drive_mu2_0.6_conservative",
+  "lidar": "あり",
+  "n": 3,
+  "ok": 3,
+  "t_mean": 29.361666666666668,
+  "t_max": 29.89,
+  "go": 9.056666666666667,
+  "rot": 2.983333333333333,
+  "ret": 11.286666666666667,
+  "stop": 10.2,
+  "ov": 6.0,
+  "se": 0.8,
+  "cgo": 173.81514366135835,
+  "cret": 152.93580841504397,
+  "est": 20.6,
+  "contact": 0,
+  "fails": ""
+ }
+]

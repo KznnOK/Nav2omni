@@ -30,5 +30,5 @@
 | lidar_yaw_1 | なし | 3/3 | 25.67 / 25.77 | 7.52/2.83/9.31 | 27.2 | 0.0 | 0.70 | 174 / 160 | 33.3 | 0 |  |
 | lidar_pos_5mm | あり | 3/3 | 25.89 / 26.27 | 7.34/2.98/9.54 | 16.9 | 12.4 | 0.78 | 168 / 162 | 27.9 | 0 |  |
 | lidar_pos_5mm | なし | 3/3 | 25.65 / 25.75 | 7.44/2.78/9.41 | 38.1 | 0.0 | 0.68 | 173 / 148 | 40.7 | 0 |  |
-| drive_slip | あり | 0/3 | - / - | -/-/- | 9.0 | - | - | 0 / 9000 | 25.4 | 3 | mission failed: timeout in BACKOFF_1; mission failed: timeout in GO_SAKURA |
-| drive_slip | なし | 0/3 | - / - | -/-/- | - | - | - | 0 / 9000 | 27.3 | 3 | mission failed: timeout in GO_SAKURA |
+| drive_mu2_0.4 | あり | 0/3 | - / - | -/-/- | 9.0 | - | - | 0 / 9000 | 25.4 | 3 | mission failed: timeout in BACKOFF_1; mission failed: timeout in GO_SAKURA |
+| drive_mu2_0.4 | なし | 0/3 | - / - | -/-/- | - | - | - | 0 / 9000 | 27.3 | 3 | mission failed: timeout in GO_SAKURA |

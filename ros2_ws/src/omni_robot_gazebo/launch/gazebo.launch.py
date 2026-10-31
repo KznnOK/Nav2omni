@@ -42,8 +42,8 @@ def spawn_with_sim_errors(context, xacro_file, controllers_file):
         args.append(f"tracking_err_angle_deg_{index}:="
                     f"{float(wheel.get('angle_deg', 0.0))}")
     drive = conditions.get("drive_wheel_error", {}) or {}
-    args.append("drive_mu_rolling_scale:="
-                f"{float(drive.get('mu_rolling_scale', 1.0))}")
+    args.append("drive_mu2_scale:="
+                f"{float(drive.get('mu2_scale', 1.0))}")
     urdf = subprocess.run(args, check=True, capture_output=True,
                           text=True).stdout
     sim_urdf = tempfile.NamedTemporaryFile(

@@ -570,7 +570,7 @@
   "fails": ""
  },
  {
-  "cond": "drive_slip",
+  "cond": "drive_mu2_0.4",
   "lidar": "あり",
   "n": 3,
   "ok": 0,
@@ -589,7 +589,7 @@
   "fails": "mission failed: timeout in BACKOFF_1; mission failed: timeout in GO_SAKURA"
  },
  {
-  "cond": "drive_slip",
+  "cond": "drive_mu2_0.4",
   "lidar": "なし",
   "n": 3,
   "ok": 0,

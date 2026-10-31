@@ -10,7 +10,7 @@
   <!-- Simulation-only hardware errors (sim_conditions.yaml). They change
        only the model spawned in Gazebo; robot_state_publisher and the robot
        software keep the nominal values. -->
-  <xacro:arg name="drive_mu_rolling_scale" default="1.0"/>
+  <xacro:arg name="drive_mu2_scale" default="1.0"/>
   <xacro:arg name="tracking_diameter_scale" default="1.0"/>
   <xacro:arg name="tracking_err_x_0" default="0.0"/>
   <xacro:arg name="tracking_err_y_0" default="0.0"/>
@@ -171,7 +171,7 @@
            where z is the axle. The axle does not turn while the wheel spins,
            so mu1 stays along the free rollers and mu2 along rolling. -->
       <mu1>${geom['drive_wheels']['mu_axle']}</mu1>
-      <mu2>${geom['drive_wheels']['mu_rolling'] * $(arg drive_mu_rolling_scale)}</mu2>
+      <mu2>${geom['drive_wheels']['mu_rolling'] * $(arg drive_mu2_scale)}</mu2>
       <fdir1>0 0 1</fdir1>
 
       <kp>1000000.0</kp>
