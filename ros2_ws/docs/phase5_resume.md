@@ -24,3 +24,5 @@ results/phase5_single_error/stop_sim.sh   # 停止
 - 停止の見張り: 指令ありで3秒動かないと、解放して経路を作り直し、2回で FAILED（`stall_*` パラメータ）。
 - 試験: 駆動輪 mu2 = 0.4 / 0.6 / 0.8、上限有効（`mu_drive` = mu2）、補正あり各3回。結果は `runs_friclim.csv` / `table_friclim.md`。全部 3/3 成功。
 - 例: `CONDS=drive_mu2_0.4 LIDARS=true SUFFIX=_friclim EXTRA_SET="--set friction_limit_enabled=true --set mu_drive=0.4" OUT=<csv> results/phase5_single_error/run_conditions.sh`
+
+- 結論: 計画の摩擦係数は実測値より低めに置く（`docs/friction_accel_limit_proposal.md` 6章）。補正指令には摩擦上限、経路追従の指令は1.3倍の余裕を残す。設計の全体像は `docs/design_overview.md`。
