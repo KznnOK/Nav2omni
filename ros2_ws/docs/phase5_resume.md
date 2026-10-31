@@ -18,3 +18,9 @@ CONDS="drive_mu2_0.4" results/phase5_single_error/run_conditions.sh | tee /tmp/p
 python3 results/phase5_single_error/p5_table.py <結合したruns.csv> results/phase5_single_error/timeseries > results/phase5_single_error/table.md
 results/phase5_single_error/stop_sim.sh   # 停止
 ```
+
+## 摩擦による加速度上限（追加）
+- 実装: `trajectory.py` の `FrictionLimit`、パラメータは `sakura_mission.yaml`（`friction_limit_enabled` 既定 false）。設計は `docs/friction_accel_limit_proposal.md`。
+- 停止の見張り: 指令ありで3秒動かないと、解放して経路を作り直し、2回で FAILED（`stall_*` パラメータ）。
+- 試験: 駆動輪 mu2 = 0.4 / 0.6 / 0.8、上限有効（`mu_drive` = mu2）、補正あり各3回。結果は `runs_friclim.csv` / `table_friclim.md`。全部 3/3 成功。
+- 例: `CONDS=drive_mu2_0.4 LIDARS=true SUFFIX=_friclim EXTRA_SET="--set friction_limit_enabled=true --set mu_drive=0.4" OUT=<csv> results/phase5_single_error/run_conditions.sh`

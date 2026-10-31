@@ -29,6 +29,7 @@ import math
 import rclpy
 from geometry_msgs.msg import PoseStamped, Twist
 from nav_msgs.msg import OccupancyGrid, Odometry, Path
+from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
@@ -41,7 +42,7 @@ from omni_robot_description.geometry import (
 from omni_robot_mission.collision import OccupancyChecker
 from omni_robot_mission.route_graph import RouteGraph
 from omni_robot_mission.trajectory import (
-    CommandShaper, SmoothPath, stopping_speed, wrap)
+    CommandShaper, FrictionLimit, SmoothPath, stopping_speed, wrap)
 
 
 DEBUG_FIELDS = ["ref_x", "ref_y", "ref_v", "ref_yaw", "est_x", "est_y",
@@ -144,6 +145,15 @@ class SakuraMission(Node):
         p("use_lidar_correction", True)
         p("pose_latency_max_s", 0.1)
         p("control_rate", 50.0)
+        # Acceleration limits from the drive-wheel friction (FrictionLimit)
+        p("friction_limit_enabled", False)
+        p("mu_drive", 0.6)              # 仮値: drive-wheel friction coefficient (mu2)
+        p("friction_safety", 0.8)       # 仮値: usable share of the friction
+        p("yaw_friction_reserve", 0.15)  # 仮値: share of the friction kept for turning
+        # No-progress watchdog: command given but the robot stays still
+        p("stall_time_s", 3.0)
+        p("stall_max_retries", 2)
+        p("stall_release_s", 0.5)
 
         self.geometry = load_geometry(self.get_parameter("geometry_file").value)
         _, self.wheel_x, self.wheel_y, self.wheel_yaw = drive_wheel_layout(
@@ -155,6 +165,11 @@ class SakuraMission(Node):
             [w for w in self.get_parameter("waypoints").value if w],
             [e for e in self.get_parameter("edges").value if e])
 
+        self.update_friction()
+        self.last_command = (0.0, 0.0, 0.0)
+        self.stall_since = None
+        self.stall_count = 0
+        self.release_until = None
         self.checker = None
         self.enabled = False
         self.state = "IDLE"
@@ -192,6 +207,27 @@ class SakuraMission(Node):
     # ------------------------------------------------------------ inputs
     def param(self, name):
         return self.get_parameter(name).value
+
+    def update_friction(self):
+        """(Re)build the friction limit from the parameters; called at the
+        start of each mission so that parameters set at run time apply."""
+        mass = float(self.geometry["mass"]["total"])
+        chassis = self.geometry["chassis"]
+        self.friction = FrictionLimit(
+            bool(self.param("friction_limit_enabled")),
+            float(self.param("mu_drive")), float(self.param("friction_safety")),
+            float(self.param("yaw_friction_reserve")), mass,
+            # box approximation of the yaw inertia of the chassis
+            mass * (chassis["length"] ** 2 + chassis["width"] ** 2) / 12.0,
+            float(self.geometry["drive_wheels"]["center_distance"]))
+
+    def limit(self, name):
+        """max_accel / max_lateral_accel / max_yaw_accel after the friction
+        limit (diagonal value for the direction-independent uses)."""
+        value = float(self.param(name))
+        if name == "max_yaw_accel":
+            return min(value, self.friction.yaw_accel)
+        return min(value, self.friction.min_accel())
 
     def on_map(self, msg):
         keepout = [tuple(float(v) for v in k.split())
@@ -297,16 +333,26 @@ class SakuraMission(Node):
 
     def start_mission(self):
         self.saturation_steps = 0
+        self.update_friction()
+        self.stall_since, self.stall_count, self.release_until = None, 0, None
+        if self.friction.enabled:
+            self.get_logger().info(
+                f"friction limit: mu={self.param('mu_drive')}, translation "
+                f"{self.friction.min_accel():.2f} m/s^2 (diagonal) to "
+                f"{self.friction.min_accel() * math.sqrt(2.0):.2f} m/s^2 (face), "
+                f"yaw {self.friction.yaw_accel:.2f} rad/s^2")
         ratio = float(self.param("command_accel_ratio"))
         # The plan turns on arcs with up to max_lateral_accel, which may be
         # larger than max_accel; the command must be able to follow that.
         accel = max(float(self.param("max_accel")),
                     float(self.param("max_lateral_accel")))
+        if self.friction.enabled:  # no direction can exceed the face value
+            accel = min(accel, self.friction.min_accel() * math.sqrt(2.0))
         self.shaper = CommandShaper(
             float(self.param("max_speed")) * 1.05,
             accel * ratio,
             float(self.param("max_yaw_rate")) * 1.05,
-            float(self.param("max_yaw_accel")) * ratio)
+            self.limit("max_yaw_accel") * ratio)
         if self.checker is None:
             self.fail("no map")
             return
@@ -402,10 +448,59 @@ class SakuraMission(Node):
                 return
             if self.move.label and self.move.label != self.state:
                 self.next_state(self.move.label)
+        if self.release_until is not None:
+            if self.get_clock().now() < self.release_until:
+                self.cmd_pub.publish(Twist())
+                return
+            self.release_until = None
         if self.control(self.move, pose):
             self.move = None
+            self.stall_since, self.stall_count = None, 0
             if not self.moves:
                 self.after_moves()
+        else:
+            self.check_stall(pose)
+
+    def check_stall(self, pose):
+        """No-progress watchdog: a command is given but the robot stays still.
+        First tries to recover (zero command for stall_release_s, then re-plan
+        from the current pose); after stall_max_retries, FAILED with the cause."""
+        vx, vy, wz = self.last_command
+        commanded = math.hypot(vx, vy) > 0.03 or abs(wz) > 0.1
+        still = self.speed < 0.01 and abs(self.yaw_rate) < 0.02
+        now = self.get_clock().now()
+        if not (commanded and still):
+            self.stall_since = None
+            return
+        if self.stall_since is None:
+            self.stall_since = now
+        stalled = (now - self.stall_since).nanoseconds * 1e-9
+        if stalled < float(self.param("stall_time_s")):
+            return
+        move = self.move
+        if move.kind == "path":
+            gx, gy = move.path.goal
+        else:
+            gx, gy = move.hold
+        cause = (f"no motion for {stalled:.1f} s in {self.state} although "
+                 f"commanded (vx,vy,wz)=({vx:.3f},{vy:.3f},{wz:.3f}); "
+                 f"goal error (dx,dy,dyaw)=({gx - pose[0]:.3f},{gy - pose[1]:.3f},"
+                 f"{wrap(move.yaw - pose[2]):.3f}); "
+                 f"mu_drive={self.param('mu_drive')}")
+        self.stall_count += 1
+        self.stall_since = None
+        if self.stall_count > int(self.param("stall_max_retries")):
+            self.fail("stalled: " + cause)
+            return
+        self.get_logger().warn(
+            f"stall {self.stall_count}/{self.param('stall_max_retries')}: "
+            f"{cause}; releasing and re-planning")
+        self.shaper.reset()
+        self.cmd_pub.publish(Twist())
+        self.release_until = now + Duration(
+            seconds=float(self.param("stall_release_s")))
+        if move.kind == "path":
+            self.activate(move, pose)
 
     def speed_limit(self, direction, yaw_per_m):
         """Max speed in a body-frame direction with every wheel <= its limit,
@@ -437,7 +532,8 @@ class SakuraMission(Node):
                     rotation_length=float(self.param("rotation_length_max")),
                     rotation_min_length=float(self.param("rotation_length_min")),
                     max_yaw_rate=float(self.param("max_yaw_rate")),
-                    max_yaw_accel=float(self.param("max_yaw_accel")))
+                    max_yaw_accel=self.limit("max_yaw_accel"),
+                    friction=self.friction)
             except (ValueError, ZeroDivisionError) as error:
                 self.fail(f"path smoothing failed: {error}")
                 return False
@@ -488,7 +584,7 @@ class SakuraMission(Node):
                 # final approach: speed that is zero exactly at the goal
                 d = math.hypot(gx - x, gy - y)
                 speed = stopping_speed(
-                    d, decel_ratio * float(self.param("max_accel")),
+                    d, decel_ratio * self.limit("max_accel"),
                     float(self.param("final_gain")))
                 vx, vy = ((gx - x) / d * speed, (gy - y) / d * speed) if d > 1e-6 \
                     else (0.0, 0.0)
@@ -504,7 +600,7 @@ class SakuraMission(Node):
             hx, hy = move.hold
             yaw_err = wrap(move.yaw - yaw)
             rate = stopping_speed(
-                abs(yaw_err), decel_ratio * float(self.param("max_yaw_accel")),
+                abs(yaw_err), decel_ratio * self.limit("max_yaw_accel"),
                 float(self.param("yaw_gain")))
             wz = math.copysign(min(rate, float(self.param("max_yaw_rate"))), yaw_err)
             # hold the position with a small capped correction
@@ -521,6 +617,7 @@ class SakuraMission(Node):
                           raw_vx=vx, raw_vy=vy, raw_wz=wz)
 
         vx, vy, wz = self.shaper.shape(vx, vy, wz, self.dt)
+        self.last_command = (vx, vy, wz)
         self.publish_command(vx, vy, wz, yaw)
 
         ok = (near_end

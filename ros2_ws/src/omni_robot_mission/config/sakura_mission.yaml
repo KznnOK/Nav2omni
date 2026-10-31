@@ -114,6 +114,20 @@ sakura_mission:
     # max_wheel_speed * r / max|cos(dir - wheel_dir)| times this margin.
     wheel_speed_margin: 0.9
 
+    # --- friction-based acceleration limits (docs/friction_accel_limit_proposal.md)
+    # Translation limited per body-frame direction by the drive-wheel friction
+    # (face ~0.71*mu*g, diagonal ~0.5*mu*g, times the shares below); the
+    # angular acceleration of turns uses the share kept for yaw.
+    friction_limit_enabled: false
+    mu_drive: 0.6                   # 仮値: drive-wheel friction coefficient (Gazebo mu2)
+    friction_safety: 0.8            # 仮値: usable share of the friction
+    yaw_friction_reserve: 0.15      # 仮値: share of the friction kept for turning
+
+    # --- no-progress watchdog (command given, robot still) ---------------------
+    stall_time_s: 3.0               # s without motion before acting
+    stall_max_retries: 2            # release + re-plan this many times, then FAILED
+    stall_release_s: 0.5            # s of zero command before re-planning
+
     # --- path shaping --------------------------------------------------------
     shortcut: true                  # drop waypoints when the straight line is clear
     fillet_max_radius: 0.8          # m, corners become the largest clear arc <= this

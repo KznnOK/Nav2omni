@@ -9,6 +9,8 @@ SmoothPath
        v <= direction limit of the X-configured wheels at the fixed heading
        v <= sqrt(max_lateral_accel / curvature)                  (arcs)
        tangential acceleration <= sqrt(a^2 - (v^2 * curvature)^2)
+       with FrictionLimit enabled, both are also limited by the drive-wheel
+       friction in the body-frame direction of travel (see FrictionLimit)
        v = 0 at the end.
 The follower projects the robot onto the path and commands the planned speed
 there (feed-forward along the tangent) plus a small, capped lateral
@@ -20,6 +22,65 @@ import math
 
 def wrap(angle):
     return math.atan2(math.sin(angle), math.cos(angle))
+
+
+class FrictionLimit:
+    """Acceleration limits from the drive-wheel friction (X-configured omni
+    wheels, equal wheel loads, no load transfer).
+
+    The wheels roll along the body diagonals e1, e2 (45 deg to the chassis
+    faces); opposite wheels share an axis, so the force along each diagonal is
+    F_i - F_j with |F| <= mu*m*g/4. A translational acceleration a is feasible
+    when |a.e1| <= B and |a.e2| <= B, with
+        B = safety * mu * g / 2 * (1 - yaw_reserve)
+    (yaw_reserve = share of the friction kept for turning). Along a chassis
+    face this gives 0.71*mu*g, along a diagonal 0.5*mu*g (times the shares).
+    `yaw_accel` caps the angular acceleration the same way:
+        yaw_reserve * safety * mu * m * g * R / I.
+    Disabled: no limit (inf)."""
+
+    G = 9.81
+
+    def __init__(self, enabled=False, mu=0.6, safety=0.8, yaw_reserve=0.15,
+                 mass=20.0, yaw_inertia=0.83, wheel_radius_arm=0.2245):
+        self.enabled = bool(enabled)
+        if self.enabled:
+            self.budget = safety * mu * self.G / 2.0 * (1.0 - yaw_reserve)
+            self.yaw_accel = (yaw_reserve * safety * mu * mass * self.G
+                              * wheel_radius_arm / yaw_inertia)
+        else:
+            self.budget = float("inf")
+            self.yaw_accel = float("inf")
+
+    @staticmethod
+    def shares(direction):
+        """|cos|, |sin| of the direction measured from a wheel diagonal."""
+        return (abs(math.cos(direction - math.pi / 4.0)),
+                abs(math.sin(direction - math.pi / 4.0)))
+
+    def max_accel(self, direction):
+        """Largest acceleration along a body-frame direction."""
+        if not self.enabled:
+            return float("inf")
+        return self.budget / max(max(self.shares(direction)), 1e-9)
+
+    def min_accel(self):
+        """Direction-independent (diagonal) limit."""
+        return self.budget
+
+    def tangential(self, direction, normal_accel):
+        """Largest tangential acceleration while `normal_accel` acts across
+        the path (conservative: signs ignored). Direction: body-frame heading
+        of the path tangent."""
+        if not self.enabled:
+            return float("inf")
+        t1, t2 = self.shares(direction)
+        n1, n2 = t2, t1  # the normal is the tangent turned by 90 deg
+        best = float("inf")
+        for t, n in ((t1, n1), (t2, n2)):
+            if t > 1e-9:
+                best = min(best, (self.budget - normal_accel * n) / t)
+        return best
 
 
 def stopping_speed(distance, decel, gain):
@@ -39,7 +100,9 @@ class SmoothPath:
                  max_lateral_accel, speed_limit, start_speed=0.0,
                  max_radius=0.8, step=0.01, shortcut=True, yaw_end=None,
                  rotation_clear=None, rotation_length=1.2,
-                 rotation_min_length=0.4, max_yaw_rate=3.0, max_yaw_accel=6.0):
+                 rotation_min_length=0.4, max_yaw_rate=3.0, max_yaw_accel=6.0,
+                 friction=None):
+        self.friction = friction or FrictionLimit()
         self.yaw = yaw_start if yaw_end is None else yaw_end
         self.yaw_start = yaw_start
         self.max_speed = max_speed
@@ -259,24 +322,32 @@ class SmoothPath:
             if abs(self.yaw_rate_slope[i]) > 1e-6:
                 v = min(v, math.sqrt(max_yaw_accel / abs(self.yaw_rate_slope[i])))
             if curvature > 1e-6:
-                v = min(v, math.sqrt(max_lateral_accel / curvature))
+                v = min(v, math.sqrt(min(max_lateral_accel,
+                                         self.friction.max_accel(direction))
+                                     / curvature))
             limit.append(v)
 
-        def tangential(v, curvature):
+        def tangential(v, curvature, i):
             lateral = v * v * curvature
-            return math.sqrt(max(self.max_accel ** 2 - lateral ** 2,
-                                 (0.2 * self.max_accel) ** 2))
+            a = math.sqrt(max(self.max_accel ** 2 - lateral ** 2,
+                              (0.2 * self.max_accel) ** 2))
+            if self.friction.enabled:
+                direction = math.atan2(self.samples[i][3], self.samples[i][2]) \
+                    - self.yaws[i]
+                a = min(a, max(self.friction.tangential(direction, lateral),
+                               0.2 * self.friction.min_accel()))
+            return a
 
         speed = list(limit)
         speed[0] = min(speed[0], start_speed)
         for i in range(1, n):
             ds = self.samples[i][5] - self.samples[i - 1][5]
-            a = tangential(speed[i - 1], self.samples[i - 1][4])
+            a = tangential(speed[i - 1], self.samples[i - 1][4], i - 1)
             speed[i] = min(speed[i], math.sqrt(speed[i - 1] ** 2 + 2 * a * ds))
         speed[-1] = 0.0
         for i in range(n - 2, -1, -1):
             ds = self.samples[i + 1][5] - self.samples[i][5]
-            a = tangential(speed[i + 1], self.samples[i + 1][4])
+            a = tangential(speed[i + 1], self.samples[i + 1][4], i + 1)
             speed[i] = min(speed[i], math.sqrt(speed[i + 1] ** 2 + 2 * a * ds))
         self.speed = speed
         self.speed_limit = limit
