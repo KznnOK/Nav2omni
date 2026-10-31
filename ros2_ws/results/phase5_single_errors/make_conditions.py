@@ -42,6 +42,29 @@ CONDITIONS = {
     "lidar_yaw_1": [("lidar_mount_error", {"yaw_deg": 1.0})],
     "lidar_pos_5mm": [("lidar_mount_error", {"x": 0.005, "y": 0.005})],
     "drive_mu2_0.4": [("drive_wheel_error", {"mu2_scale": 0.4})],
+    # Combined-error conditions (phase 5 combinations; all values 仮値).
+    "combo_base": [("drive_wheel_error", {"mu2_scale": 0.6})],
+    "combo_real": [
+        ("imu_error", {"gyro_bias_z_deg_s": 0.1,
+                       "gyro_bias_random_walk_deg_s_sqrt_s": 0.01}),
+        ("tracking_wheel_error", {
+            "diameter_scale": 1.01, "quantize": True,
+            "wheels": [{"dx": 0.003, "dy": 0.003, "angle_deg": 0.5},
+                       {"dx": 0.003, "dy": 0.003, "angle_deg": 0.5}]}),
+        ("lidar_mount_error", {"pitch_deg": 0.5, "yaw_deg": 0.5,
+                               "x": 0.003, "y": 0.003}),
+        ("drive_wheel_error", {"mu2_scale": 0.6})],
+    "combo_severe": [
+        ("imu_error", {"gyro_bias_z_deg_s": 0.1,
+                       "gyro_bias_random_walk_deg_s_sqrt_s": 0.01}),
+        ("tracking_wheel_error", {
+            "diameter_scale": 1.01, "quantize": True,
+            "lift_rate_hz": 0.5, "lift_duration_s": 0.02,
+            "wheels": [{"dx": 0.003, "dy": 0.003, "angle_deg": 1.0},
+                       {"dx": 0.003, "dy": 0.003, "angle_deg": 1.0}]}),
+        ("lidar_mount_error", {"pitch_deg": 1.0, "yaw_deg": 1.0,
+                               "x": 0.005, "y": 0.005}),
+        ("drive_wheel_error", {"mu2_scale": 0.5})],
     "drive_mu2_0.5": [("drive_wheel_error", {"mu2_scale": 0.5})],
     "drive_mu2_0.6": [("drive_wheel_error", {"mu2_scale": 0.6})],
     "drive_mu2_0.8": [("drive_wheel_error", {"mu2_scale": 0.8})],

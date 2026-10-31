@@ -26,3 +26,7 @@ results/phase5_single_error/stop_sim.sh   # 停止
 - 例: `CONDS=drive_mu2_0.4 LIDARS=true SUFFIX=_friclim EXTRA_SET="--set friction_limit_enabled=true --set mu_drive=0.4" OUT=<csv> results/phase5_single_error/run_conditions.sh`
 
 - 結論: 計画の摩擦係数は実測値より低めに置く（`docs/friction_accel_limit_proposal.md` 6章）。補正指令には摩擦上限、経路追従の指令は1.3倍の余裕を残す。設計の全体像は `docs/design_overview.md`。
+
+## 誤差の組み合わせ試験（完了）
+- 結果と考察は `results/phase5_combo/README.md`（`table.md`、`runs.csv`）。15/15 成功、停止の監視は0回。
+- baseline からの悪化は復路の行き過ぎ（real +8 mm、severe +57〜80 mm）と推定誤差のピーク（severe +36〜44 mm）が目立つ。計測輪の浮きが主因と考えられる（切り分けは未実施）。
